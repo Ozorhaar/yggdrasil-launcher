@@ -64,13 +64,13 @@ fun AppTile(
     iconSize: Dp,
     showLabel: Boolean = true,
     highlighted: Boolean = false,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .then(if (onClick != null) Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick) else Modifier)
             .padding(4.dp)
             .then(if (highlighted) Modifier.border(2.dp, Ygg.GoldHi, CircleShape) else Modifier),
     ) {
@@ -78,20 +78,23 @@ fun AppTile(
             ShieldImage(app, icons, iconSize)
             Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp))
         }
-        if (showLabel) {
-            Text(
-                text = app.label,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                style = TextStyle(
-                    color = Ygg.Bone,
-                    fontSize = if (runic) 12.sp else 11.sp,
-                    fontFamily = if (runic) Ygg.Runic else null,
-                    shadow = labelShadow,
-                ),
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
+        if (showLabel) TileLabel(app.label, runic)
     }
+}
+
+@Composable
+fun TileLabel(text: String, runic: Boolean) {
+    Text(
+        text = text,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+        style = TextStyle(
+            color = Ygg.Bone,
+            fontSize = if (runic) 12.sp else 11.sp,
+            fontFamily = if (runic) Ygg.Runic else null,
+            shadow = labelShadow,
+        ),
+        modifier = Modifier.padding(top = 4.dp),
+    )
 }

@@ -1,0 +1,128 @@
+package com.ozorhaar.yggdrasil.launcher.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CutCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.ozorhaar.yggdrasil.launcher.data.AppEntry
+import com.ozorhaar.yggdrasil.launcher.data.Folder
+import com.ozorhaar.yggdrasil.launcher.data.Loc
+import com.ozorhaar.yggdrasil.launcher.icons.ShieldIcons
+
+/** What is being dragged, where the finger is, and what it is hovering over. */
+class DragState {
+    var active by mutableStateOf(false)
+    var src by mutableStateOf<Loc?>(null)
+    var item by mutableStateOf<String?>(null)
+    var pos by mutableStateOf(Offset.Zero)
+    var start = Offset.Zero
+    var startPage = 0
+    var hover by mutableStateOf<Loc?>(null)
+    var hoverInto by mutableStateOf(false)
+
+    /** Set while a long-press on an icon owns the current touch, so other gestures stand down. */
+    var ownedGesture = false
+
+    /** Screen bounds of every slot currently on screen. */
+    val cells = HashMap<Loc, Rect>()
+
+    fun begin(loc: Loc, what: String, at: Offset, page: Int) {
+        src = loc; item = what; pos = at; start = at; startPage = page
+        hover = null; hoverInto = false; active = true
+    }
+
+    fun reset() {
+        active = false; src = null; item = null; hover = null; hoverInto = false
+    }
+
+    /** The slot under [p]. With a folder open only its slots count; otherwise the current page and the dock. */
+    fun hit(p: Offset, page: Int, openFolder: String?): Loc? {
+        val found = cells.entries.firstOrNull { (loc, r) ->
+            r.contains(p) && when (loc) {
+                is Loc.InFolder -> openFolder != null && loc.id == openFolder
+                is Loc.Home -> openFolder == null && loc.page == page
+                is Loc.Dock -> openFolder == null
+            }
+        }
+        return found?.key
+    }
+
+    /** True when [p] is over the middle of the icon in slot [loc] (drop there = folder). */
+    fun overCentre(p: Offset, loc: Loc): Boolean {
+        val r = cells[loc] ?: return false
+        val c = Offset(r.center.x, r.center.y - r.height * 0.08f)
+        return (p - c).getDistance() < minOf(r.width, r.height) * 0.3f
+    }
+}
+
+/** Registers this slot's on-screen bounds so drops and touches can find it. */
+@Composable
+fun Modifier.dropCell(drag: DragState, loc: Loc): Modifier {
+    DisposableEffect(drag, loc) { onDispose { drag.cells.remove(loc) } }
+    return this.onGloballyPositioned { drag.cells[loc] = it.boundsInRoot() }
+}
+
+/** A carved frame holding up to four tiny shields. */
+@Composable
+fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons, size: Dp) {
+    val shape = CutCornerShape(size * 0.18f)
+    val mini = size * 0.38f
+    val apps = folder.apps.mapNotNull { byKey[it] }.take(4)
+    Box(
+        Modifier.size(size)
+            .background(Ygg.Night.copy(alpha = 0.72f), shape)
+            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), shape)
+            .padding(size * 0.08f),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(size * 0.04f)) {
+            for (r in 0 until 2) {
+                Row(horizontalArrangement = Arrangement.spacedBy(size * 0.04f)) {
+                    for (c in 0 until 2) {
+                        val app = apps.getOrNull(r * 2 + c)
+                        if (app != null) ShieldImage(app, icons, mini) else Box(Modifier.size(mini))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FolderTile(
+    folder: Folder,
+    byKey: Map<String, AppEntry>,
+    icons: ShieldIcons,
+    badges: Map<String, Int>,
+    runic: Boolean,
+    iconSize: Dp,
+    showLabel: Boolean = true,
+) {
+    val badge = folder.apps.sumOf { key -> byKey[key]?.let { badges[it.packageName] } ?: 0 }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp)) {
+        Box {
+            FolderIcon(folder, byKey, icons, iconSize)
+            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp))
+        }
+        if (showLabel) TileLabel(folder.name, runic)
+    }
+}

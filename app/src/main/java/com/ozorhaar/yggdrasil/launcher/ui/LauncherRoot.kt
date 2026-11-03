@@ -1,6 +1,24 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
 import android.app.WallpaperManager
+import android.os.SystemClock
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import com.ozorhaar.yggdrasil.launcher.data.FOLDER_PREFIX
+import com.ozorhaar.yggdrasil.launcher.data.Folder
+import com.ozorhaar.yggdrasil.launcher.data.Loc
+import com.ozorhaar.yggdrasil.launcher.data.isFolderRef
+import kotlin.math.roundToInt
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -116,14 +134,18 @@ fun LauncherRoot() {
     val apps by ygg.repo.apps.collectAsStateWithLifecycle()
     val badges by Badges.counts.collectAsStateWithLifecycle()
     val byKey = remember(apps) { apps.associateBy { it.key } }
+    val byKeyNow by rememberUpdatedState(byKey)
 
     val density = LocalDensity.current
     val icons = remember { ShieldIcons(with(density) { 64.dp.roundToPx() }) }
+    val haptic = LocalHapticFeedback.current
 
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
-    var moving by remember { mutableStateOf<String?>(null) }
     var menu by remember { mutableStateOf<MenuTarget?>(null) }
+    var openFolder by remember { mutableStateOf<String?>(null) }
+    val drag = remember { DragState() }
+    val rootSize = remember { IntArray(2) }
 
     val pager = rememberPagerState(pageCount = { layout.pages.size })
     val scope = rememberCoroutineScope()
@@ -131,10 +153,10 @@ fun LauncherRoot() {
     LaunchedEffect(apps) {
         if (apps.isNotEmpty()) layout.prune(apps.map { it.key }.toSet())
     }
+    // a folder that dissolved (or was ungrouped) closes itself
+    openFolder?.let { if (!layout.folders.containsKey(it)) openFolder = null }
 
-    // Tell the wallpaper we're the home screen and where we are on it. Live
-    // wallpapers (Samsung's layered engine included) stay in their dimmed /
-    // blurred "behind an app" state until a launcher reports offsets.
+    // Tell the wallpaper we're the home screen and where we are on it.
     val view = LocalView.current
     val wallpaper = remember { WallpaperManager.getInstance(ctx) }
     LaunchedEffect(view, layout.layoutMode) {
@@ -163,7 +185,7 @@ fun LauncherRoot() {
     }
     LaunchedEffect(Unit) {
         ygg.homePressed.collect {
-            drawerOpen = false; settingsOpen = false; moving = null; menu = null
+            drawerOpen = false; settingsOpen = false; menu = null; openFolder = null; drag.reset()
             scope.launch { pager.animateScrollToPage(0) }
         }
     }
@@ -171,26 +193,140 @@ fun LauncherRoot() {
     BackHandler(enabled = true) {
         when {
             menu != null -> menu = null
-            moving != null -> moving = null
+            openFolder != null -> openFolder = null
             settingsOpen -> settingsOpen = false
             drawerOpen -> drawerOpen = false
         }
     }
 
     fun launch(app: AppEntry) {
-        if (moving != null) return
         ygg.repo.launch(app)
     }
 
-    val overlayOpen = drawerOpen || settingsOpen || menu != null
+    // ---------------------------------------------------------- drag and drop
+    fun updateHover() {
+        val loc = drag.hit(drag.pos, pager.currentPage, null)
+        drag.hover = loc
+        val target = loc?.let { layout.itemAt(it) }
+        drag.hoverInto = loc != null && loc != drag.src && target != null &&
+            !isFolderRef(drag.item) && target != (drag.src as? Loc.InFolder)?.let { FOLDER_PREFIX + it.id } &&
+            drag.overCentre(drag.pos, loc)
+    }
+
+    fun tapItem(loc: Loc, item: String) {
+        val folder = layout.folderOf(item)
+        when {
+            folder != null -> openFolder = folder.id
+            else -> byKeyNow[item]?.let { app ->
+                if (loc is Loc.InFolder) openFolder = null
+                launch(app)
+            }
+        }
+    }
+
+    fun finishDrag() {
+        val src = drag.src ?: return drag.reset()
+        val item = drag.item ?: return drag.reset()
+        val moved = (drag.pos - drag.start).getDistance() > with(density) { 14.dp.toPx() } ||
+            pager.currentPage != drag.startPage
+        if (!moved) {
+            // a long-press that stayed put: options for that icon
+            val folder = layout.folderOf(item)
+            if (folder != null) openFolder = folder.id
+            else byKeyNow[item]?.let { menu = MenuTarget(it, if (src is Loc.Dock) From.DOCK else From.HOME) }
+        } else {
+            updateHover()
+            drag.hover?.let { dst -> layout.drop(src, dst, drag.hoverInto) }
+        }
+        drag.reset()
+    }
+
+    // hold at the left/right edge while dragging to turn the page
+    LaunchedEffect(drag.active) {
+        if (!drag.active) return@LaunchedEffect
+        val edge = with(density) { 28.dp.toPx() }
+        var since = 0L
+        while (drag.active) {
+            delay(80)
+            updateHover()
+            val x = drag.pos.x
+            val dir = when {
+                layout.layoutMode != LayoutMode.GRID -> 0
+                x < edge -> -1
+                x > rootSize[0] - edge -> 1
+                else -> 0
+            }
+            if (dir == 0) { since = 0L; continue }
+            val now = SystemClock.uptimeMillis()
+            if (since == 0L) { since = now; continue }
+            if (now - since < 600) continue
+            since = 0L
+            val to = pager.currentPage + dir
+            if (to < 0) continue
+            if (to >= layout.pages.size) {
+                if (layout.pages.last().all { it == null }) continue
+                layout.addPage()
+                delay(32)
+            }
+            pager.animateScrollToPage(to)
+            updateHover()
+        }
+    }
+
+    val overlayOpen = drawerOpen || settingsOpen || menu != null || openFolder != null
 
     Box(
         Modifier
             .fillMaxSize()
-            .pointerInput(overlayOpen, moving) {
-                if (overlayOpen || moving != null) return@pointerInput
+            .onGloballyPositioned { rootSize[0] = it.size.width; rootSize[1] = it.size.height }
+            // Icons: tap to open, hold to pick up, drag to move, drop on an app to make a folder.
+            // Watches the Initial pass so a drag in progress can keep the pager from scrolling.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    drag.ownedGesture = false
+                    if (drawerOpen || settingsOpen || menu != null) return@awaitEachGesture
+                    val loc = drag.hit(down.position, pager.currentPage, openFolder) ?: return@awaitEachGesture
+                    val item = layout.itemAt(loc) ?: return@awaitEachGesture
+
+                    // 1 = lifted (tap), 2 = moved or cancelled, null = held long enough
+                    val outcome = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                        var r = 0
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val c = ev.changes.firstOrNull { it.id == down.id }
+                            if (c == null) { r = 2; break }
+                            if (!c.pressed) { r = 1; break }
+                            if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) { r = 2; break }
+                        }
+                        r
+                    }
+                    if (outcome == 1) { tapItem(loc, item); return@awaitEachGesture }
+                    if (outcome == 2) return@awaitEachGesture
+
+                    drag.ownedGesture = true
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    drag.begin(loc, item, down.position, pager.currentPage)
+                    if (loc is Loc.InFolder) openFolder = null
+                    try {
+                        while (true) {
+                            val ev = awaitPointerEvent(PointerEventPass.Initial)
+                            val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            c.consume()
+                            if (!c.pressed) break
+                            drag.pos = c.position
+                            updateHover()
+                        }
+                    } finally {
+                        if (drag.active) finishDrag()
+                    }
+                }
+            }
+            .pointerInput(overlayOpen) {
+                if (overlayOpen) return@pointerInput
                 detectTapGestures(
-                    onDoubleTap = {
+                    onDoubleTap = { p ->
+                        if (drag.hit(p, pager.currentPage, null) != null) return@detectTapGestures
                         if (!LockService.lockScreen()) {
                             val msg = if (LockService.isEnabledInSettings(ctx))
                                 "Lock service is on but not running yet. Switch it off and on in Accessibility."
@@ -198,15 +334,19 @@ fun LauncherRoot() {
                             Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
                         }
                     },
-                    onLongPress = { settingsOpen = true },
+                    onLongPress = { p ->
+                        if (drag.ownedGesture || drag.hit(p, pager.currentPage, null) != null) return@detectTapGestures
+                        settingsOpen = true
+                    },
                 )
             }
-            .pointerInput(overlayOpen, moving) {
-                if (overlayOpen || moving != null) return@pointerInput
+            .pointerInput(overlayOpen) {
+                if (overlayOpen) return@pointerInput
                 var total = 0f
                 detectVerticalDragGestures(
                     onDragStart = { total = 0f },
                     onDragEnd = {
+                        if (drag.ownedGesture) return@detectVerticalDragGestures
                         if (total < -140f) drawerOpen = true
                         else if (total > 140f) ctx.expandNotifications()
                     },
@@ -239,17 +379,7 @@ fun LauncherRoot() {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (layout.layoutMode) {
-                    LayoutMode.GRID -> HomeGrid(
-                        layout, byKey, icons, badges, pager, moving,
-                        onTap = { key, page, slot ->
-                            val m = moving
-                            if (m != null) {
-                                layout.moveTo(m, page, slot); moving = null
-                            } else byKey[key]?.let { launch(it) }
-                        },
-                        onLong = { key -> byKey[key]?.let { menu = MenuTarget(it, From.HOME) } },
-                        onEmpty = { page, slot -> moving?.let { layout.moveTo(it, page, slot) }; moving = null },
-                    )
+                    LayoutMode.GRID -> HomeGrid(layout, byKey, icons, badges, pager, drag)
                     LayoutMode.LONGHALL -> Longhall(
                         layout, byKey, icons, badges,
                         onTap = { launch(it) },
@@ -258,23 +388,27 @@ fun LauncherRoot() {
                 }
             }
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
-            Dock(layout, byKey, icons, badges, onTap = { launch(it) }, onLong = { menu = MenuTarget(it, From.DOCK) })
+            Dock(layout, byKey, icons, badges, drag)
         }
 
-        // move-mode banner
-        AnimatedVisibility(moving != null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
-            val name = byKey[moving]?.label ?: ""
-            Row(
-                Modifier.statusBarsPadding().padding(12.dp)
-                    .background(Ygg.Night.copy(alpha = 0.92f), CutCornerShape(10.dp))
-                    .border(1.dp, Ygg.Gold, CutCornerShape(10.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+        openFolder?.let { id -> layout.folders[id] }?.let { folder ->
+            FolderPopup(folder, layout, byKey, icons, badges, drag, onClose = { openFolder = null })
+        }
+
+        // the icon riding under your finger
+        if (drag.active) {
+            val item = drag.item
+            val size = 62.dp
+            val half = with(density) { (size / 2).toPx() }
+            Box(
+                Modifier
+                    .offset { IntOffset((drag.pos.x - half).roundToInt(), (drag.pos.y - half * 1.4f).roundToInt()) }
+                    .size(size)
+                    .graphicsLayer { scaleX = 1.12f; scaleY = 1.12f; alpha = 0.92f }
             ) {
-                RuneText("Place $name", 15.sp, Ygg.Bone)
-                RuneButton("+ Page") { layout.addPage(); scope.launch { pager.animateScrollToPage(layout.pages.lastIndex) } }
-                RuneButton("Cancel") { moving = null }
+                val folder = layout.folderOf(item)
+                if (folder != null) FolderIcon(folder, byKey, icons, size)
+                else item?.let { byKey[it] }?.let { ShieldImage(it, icons, size) }
             }
         }
 
@@ -301,15 +435,57 @@ fun LauncherRoot() {
                 layout = layout,
                 icons = icons,
                 onDismiss = { menu = null },
-                onMove = {
-                    moving = target.app.key; menu = null; drawerOpen = false
-                },
             )
         }
     }
 }
 
 // =================================================================== home grid
+
+/** Shows what a slot holds, plus the drag feedback (lifted, drop here, make a folder). */
+@Composable
+private fun SlotContent(
+    loc: Loc,
+    item: String?,
+    layout: LayoutStore,
+    byKey: Map<String, AppEntry>,
+    icons: ShieldIcons,
+    badges: Map<String, Int>,
+    drag: DragState,
+    iconSize: Dp,
+    showLabel: Boolean,
+) {
+    val lifted = drag.active && drag.src == loc
+    val hovered = drag.active && drag.hover == loc && !lifted
+    Box(contentAlignment = Alignment.TopCenter) {
+        if (hovered && drag.hoverInto) {
+            // drop here to gather into a folder
+            Box(
+                Modifier.padding(top = 4.dp).size(iconSize)
+                    .graphicsLayer { scaleX = 1.22f; scaleY = 1.22f }
+                    .background(Ygg.Gold.copy(alpha = 0.22f), CutCornerShape(iconSize * 0.18f))
+                    .border(2.dp, Ygg.GoldHi, CutCornerShape(iconSize * 0.18f))
+            )
+        } else if (hovered || (drag.active && item == null)) {
+            Box(
+                Modifier.padding(top = 4.dp).size(iconSize)
+                    .border(
+                        1.5.dp,
+                        if (hovered) Ygg.GoldHi else Ygg.Gold.copy(alpha = 0.3f),
+                        CircleShape,
+                    )
+            )
+        }
+        Box(Modifier.graphicsLayer { alpha = if (lifted) 0.25f else 1f }) {
+            val folder = layout.folderOf(item)
+            val app = item?.let { byKey[it] }
+            when {
+                folder != null -> FolderTile(folder, byKey, icons, badges, layout.runicLabels, iconSize, showLabel)
+                app != null -> AppTile(app, icons, badges[app.packageName] ?: 0, layout.runicLabels, iconSize, showLabel = showLabel)
+            }
+        }
+    }
+}
 
 @Composable
 private fun HomeGrid(
@@ -318,14 +494,11 @@ private fun HomeGrid(
     icons: ShieldIcons,
     badges: Map<String, Int>,
     pager: androidx.compose.foundation.pager.PagerState,
-    moving: String?,
-    onTap: (String, Int, Int) -> Unit,
-    onLong: (String) -> Unit,
-    onEmpty: (Int, Int) -> Unit,
+    drag: DragState,
 ) {
     val cols = layout.columns
     val rows = layout.rows
-    HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { pageIdx ->
+    HorizontalPager(state = pager, userScrollEnabled = !drag.active, modifier = Modifier.fillMaxSize()) { pageIdx ->
         val page = layout.pages.getOrNull(pageIdx) ?: return@HorizontalPager
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
             val iconSize = minOf(maxWidth / cols * 0.62f, 60.dp)
@@ -334,23 +507,12 @@ private fun HomeGrid(
                     Row(Modifier.weight(1f).fillMaxWidth()) {
                         for (c in 0 until cols) {
                             val slot = r * cols + c
-                            val key = page.getOrNull(slot)
-                            val app = key?.let { byKey[it] }
-                            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                if (app != null) {
-                                    AppTile(
-                                        app, icons, badges[app.packageName] ?: 0, layout.runicLabels, iconSize,
-                                        highlighted = moving == app.key,
-                                        onClick = { onTap(app.key, pageIdx, slot) },
-                                        onLongClick = { onLong(app.key) },
-                                    )
-                                } else if (moving != null) {
-                                    Box(
-                                        Modifier.size(iconSize)
-                                            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.55f), CircleShape)
-                                            .clickable { onEmpty(pageIdx, slot) }
-                                    )
-                                }
+                            val loc = Loc.Home(pageIdx, slot)
+                            Box(
+                                Modifier.weight(1f).fillMaxHeight().dropCell(drag, loc),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                SlotContent(loc, page.getOrNull(slot), layout, byKey, icons, badges, drag, iconSize, true)
                             }
                         }
                     }
@@ -386,8 +548,7 @@ private fun Dock(
     byKey: Map<String, AppEntry>,
     icons: ShieldIcons,
     badges: Map<String, Int>,
-    onTap: (AppEntry) -> Unit,
-    onLong: (AppEntry) -> Unit,
+    drag: DragState,
 ) {
     Row(
         Modifier
@@ -399,13 +560,99 @@ private fun Dock(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        layout.dock.forEach { key ->
-            val app = key?.let { byKey[it] }
-            Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
-                if (app != null) AppTile(
-                    app, icons, badges[app.packageName] ?: 0, layout.runicLabels, 52.dp,
-                    showLabel = false, onClick = { onTap(app) }, onLongClick = { onLong(app) },
-                )
+        layout.dock.forEachIndexed { i, key ->
+            val loc = Loc.Dock(i)
+            Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
+                SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
+            }
+        }
+    }
+}
+
+// =================================================================== folder
+
+@Composable
+private fun FolderPopup(
+    folder: Folder,
+    layout: LayoutStore,
+    byKey: Map<String, AppEntry>,
+    icons: ShieldIcons,
+    badges: Map<String, Int>,
+    drag: DragState,
+    onClose: () -> Unit,
+) {
+    var editing by remember(folder.id) { mutableStateOf(false) }
+    var name by remember(folder.id) { mutableStateOf(folder.name) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun commit() {
+        layout.renameFolder(folder.id, name); name = folder.name; editing = false; keyboard?.hide()
+    }
+    Box(
+        Modifier.fillMaxSize().background(Color(0xAA000000))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                if (editing) commit()
+                onClose()
+            }
+            .imePadding(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .padding(horizontal = 20.dp)
+                .fillMaxWidth()
+                .background(Ygg.Night2.copy(alpha = 0.97f), CutCornerShape(18.dp))
+                .border(1.5.dp, Ygg.Gold.copy(alpha = 0.7f), CutCornerShape(18.dp))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                .padding(18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (editing) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it.take(24) },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Ygg.Bone, fontSize = 18.sp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { commit() }),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Ygg.Gold, unfocusedBorderColor = Ygg.Gold.copy(alpha = 0.4f), cursorColor = Ygg.Gold,
+                        ),
+                        shape = CutCornerShape(10.dp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    RuneButton("Save") { commit() }
+                } else {
+                    Box(Modifier.weight(1f).clickable { name = folder.name; editing = true }) {
+                        RuneText(folder.name, 26.sp, Ygg.Gold)
+                    }
+                    RuneButton("Rename") { name = folder.name; editing = true }
+                }
+            }
+            Canvas(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(6.dp)) {
+                drawLine(Ygg.Gold.copy(alpha = 0.35f), Offset(0f, size.height), Offset(size.width, 0f), strokeWidth = 2f)
+            }
+            Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                folder.apps.toList().chunked(4).forEachIndexed { r, rowKeys ->
+                    Row(Modifier.fillMaxWidth()) {
+                        for (c in 0 until 4) {
+                            val idx = r * 4 + c
+                            val key = rowKeys.getOrNull(c)
+                            val cell = Modifier.weight(1f).height(92.dp)
+                            if (key == null) Spacer(cell)
+                            else Box(cell.dropCell(drag, Loc.InFolder(folder.id, idx)), contentAlignment = Alignment.Center) {
+                                byKey[key]?.let { app ->
+                                    AppTile(app, icons, badges[app.packageName] ?: 0, layout.runicLabels, 52.dp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { RuneText("Hold and drag an app out to take it out", 13.sp, Ygg.Ash) }
+                RuneButton("Ungroup") { layout.ungroup(folder.id); onClose() }
             }
         }
     }
@@ -605,11 +852,10 @@ private fun ActionSheet(
     layout: LayoutStore,
     icons: ShieldIcons,
     onDismiss: () -> Unit,
-    onMove: () -> Unit,
 ) {
     val ctx = LocalContext.current
     val app = target.app
-    val onHome = layout.pages.any { app.key in it }
+    val onHome = layout.isOnHome(app.key)
     val inDock = app.key in layout.dock
     Box(
         Modifier.fillMaxSize().background(Color(0x99000000))
@@ -632,7 +878,6 @@ private fun ActionSheet(
                 RuneText(app.label, 22.sp, Ygg.Gold)
             }
             Spacer(Modifier.height(10.dp))
-            if (onHome && target.from == From.HOME) SheetItem("Move") { onMove() }
             if (onHome) SheetItem("Remove from home") { layout.removeFromHome(app.key); onDismiss() }
             else SheetItem("Add to home") { layout.addToHome(app.key); onDismiss() }
             if (inDock) SheetItem("Unpin from dock") { layout.unpinFromDock(app.key); onDismiss() }
@@ -753,7 +998,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down: notifications\nDouble-tap: lock\nHold empty space: this page\nHold an app: options",
+            "Swipe up: all apps\nSwipe down: notifications\nDouble-tap: lock\nHold empty space: this page\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
