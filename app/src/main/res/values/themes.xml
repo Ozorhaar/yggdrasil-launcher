@@ -2,6 +2,9 @@
 <resources>
     <style name="Theme.Yggdrasil" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowShowWallpaper">true</item>
+        <!-- Like Nova: a translucent home window, so the wallpaper engine knows it is visible
+             (Samsung's layered wallpaper blurs/dims itself behind opaque windows). -->
+        <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:colorBackgroundCacheHint">@null</item>
         <item name="android:windowNoTitle">true</item>
