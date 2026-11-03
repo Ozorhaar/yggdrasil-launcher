@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -21,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -44,12 +46,20 @@ fun ShieldImage(app: AppEntry, icons: ShieldIcons, size: Dp) {
 @Composable
 fun Badge(count: Int, modifier: Modifier = Modifier) {
     if (count <= 0) return
+    val text = if (count > 99) "99+" else count.toString()
     Box(
         modifier
-            .size(14.dp)
+            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
             .background(Ygg.Ember, CircleShape)
-            .border(2.dp, Ygg.Night, CircleShape)
-    )
+            .border(1.5.dp, Ygg.Night, CircleShape)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, lineHeight = 13.sp),
+        )
+    }
 }
 
 val labelShadow = Shadow(color = Color(0xCC000000), blurRadius = 6f)
@@ -76,7 +86,7 @@ fun AppTile(
     ) {
         Box {
             ShieldImage(app, icons, iconSize)
-            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp))
+            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp))
         }
         if (showLabel) TileLabel(app.label, runic)
     }

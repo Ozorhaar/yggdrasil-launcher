@@ -39,12 +39,30 @@ class BadgeService : NotificationListenerService() {
             return
         }
         val map = HashMap<String, Int>()
+        val summaries = HashMap<String, Int>()
         for (sbn in active) {
             val n = sbn.notification
             if (sbn.isOngoing || !sbn.isClearable) continue
-            if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) continue
-            map[sbn.packageName] = (map[sbn.packageName] ?: 0) + 1
+            val count = unreadIn(n)
+            if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) {
+                summaries[sbn.packageName] = maxOf(summaries[sbn.packageName] ?: 0, count)
+                continue
+            }
+            map[sbn.packageName] = (map[sbn.packageName] ?: 0) + count
         }
+        // an app that posted only a summary (no individual notifications) still gets its count
+        summaries.forEach { (pkg, c) -> if (pkg !in map) map[pkg] = c }
         Badges.publish(map)
+    }
+
+    /** How many unread things one notification stands for: the app's own count, its bundled messages, or 1. */
+    private fun unreadIn(n: Notification): Int {
+        if (n.number > 0) return n.number
+        val msgs = n.extras?.let {
+            @Suppress("DEPRECATION") it.getParcelableArray(Notification.EXTRA_MESSAGES)?.size
+        } ?: 0
+        if (msgs > 0) return msgs
+        val lines = n.extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.size ?: 0
+        return maxOf(1, lines)
     }
 }

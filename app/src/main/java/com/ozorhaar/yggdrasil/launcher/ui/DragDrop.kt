@@ -121,7 +121,7 @@ fun FolderTile(
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp)) {
         Box {
             FolderIcon(folder, byKey, icons, iconSize)
-            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = (-2).dp))
+            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp))
         }
         if (showLabel) TileLabel(folder.name, runic)
     }
