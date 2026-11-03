@@ -8,12 +8,12 @@ val ciRun = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "com.ozorhaar.yggdrasil.launcher"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.ozorhaar.yggdrasil.launcher"
         minSdk = 31
-        targetSdk = 35
+        targetSdk = 36
         versionCode = ciRun
         versionName = "1.0.$ciRun"
     }
