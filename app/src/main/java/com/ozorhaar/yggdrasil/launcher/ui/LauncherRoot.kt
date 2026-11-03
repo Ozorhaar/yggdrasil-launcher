@@ -213,6 +213,10 @@ fun LauncherRoot() {
             drag.overCentre(drag.pos, loc)
     }
 
+    /** True only when an actual icon (not an empty slot) is under [p]. */
+    fun iconAt(p: Offset): Boolean =
+        drag.hit(p, pager.currentPage, null)?.let { layout.itemAt(it) } != null
+
     fun tapItem(loc: Loc, item: String) {
         val folder = layout.folderOf(item)
         when {
@@ -326,7 +330,7 @@ fun LauncherRoot() {
                 if (overlayOpen) return@pointerInput
                 detectTapGestures(
                     onDoubleTap = { p ->
-                        if (drag.hit(p, pager.currentPage, null) != null) return@detectTapGestures
+                        if (iconAt(p)) return@detectTapGestures
                         if (!LockService.lockScreen()) {
                             val msg = if (LockService.isEnabledInSettings(ctx))
                                 "Lock service is on but not running yet. Switch it off and on in Accessibility."
@@ -335,7 +339,7 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
-                        if (drag.ownedGesture || drag.hit(p, pager.currentPage, null) != null) return@detectTapGestures
+                        if (drag.ownedGesture || iconAt(p)) return@detectTapGestures
                         settingsOpen = true
                     },
                 )
