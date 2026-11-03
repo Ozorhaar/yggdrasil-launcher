@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yggdrasil</string>
+    <string name="badge_service_label">Yggdrasil unread badges</string>
+    <string name="lock_service_label">Yggdrasil double-tap to lock</string>
+    <string name="lock_service_description">Lets Yggdrasil Launcher lock the screen when you double-tap an empty part of the home screen. It reads nothing on your screen and does nothing else.</string>
+</resources>
