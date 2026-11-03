@@ -1,5 +1,6 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
+import android.app.WallpaperManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -53,7 +54,9 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -73,6 +76,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.TextUnit
@@ -125,6 +129,36 @@ fun LauncherRoot() {
 
     LaunchedEffect(apps) {
         if (apps.isNotEmpty()) layout.prune(apps.map { it.key }.toSet())
+    }
+
+    // Tell the wallpaper we're the home screen and where we are on it. Live
+    // wallpapers (Samsung's layered engine included) stay in their dimmed /
+    // blurred "behind an app" state until a launcher reports offsets.
+    val view = LocalView.current
+    val wallpaper = remember { WallpaperManager.getInstance(ctx) }
+    LaunchedEffect(view, layout.layoutMode) {
+        snapshotFlow { Triple(pager.currentPage, pager.currentPageOffsetFraction, layout.pages.size) }
+            .collect { (page, frac, count) ->
+                val token = view.windowToken ?: return@collect
+                val steps = if (count > 1) 1f / (count - 1) else 0f
+                val x = if (count > 1 && layout.layoutMode == LayoutMode.GRID)
+                    ((page + frac) / (count - 1)).coerceIn(0f, 1f) else 0.5f
+                runCatching {
+                    wallpaper.setWallpaperOffsetSteps(steps, 0f)
+                    wallpaper.setWallpaperOffsets(token, x, 0.5f)
+                }
+            }
+    }
+    DisposableEffect(view) {
+        val listener = object : android.view.View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) {
+                runCatching { wallpaper.setWallpaperOffsets(v.windowToken, 0.5f, 0.5f) }
+            }
+            override fun onViewDetachedFromWindow(v: android.view.View) {}
+        }
+        view.addOnAttachStateChangeListener(listener)
+        if (view.windowToken != null) runCatching { wallpaper.setWallpaperOffsets(view.windowToken, 0.5f, 0.5f) }
+        onDispose { view.removeOnAttachStateChangeListener(listener) }
     }
     LaunchedEffect(Unit) {
         ygg.homePressed.collect {
