@@ -31,6 +31,9 @@ class LayoutStore(context: Context) {
     /** How much to darken the wallpaper, 0-60 (percent). One UI and Nova dim it too. */
     var wallShade by mutableStateOf(prefs.getInt("wall_shade", 0))
         private set
+    /** Name of a bundled YggWallpaper the launcher paints itself, or "" for the system wallpaper. */
+    var backdrop by mutableStateOf(prefs.getString("backdrop", "") ?: "")
+        private set
 
     val pages: SnapshotStateList<SnapshotStateList<String?>> = mutableStateListOf()
     val dock: SnapshotStateList<String?> = mutableStateListOf()
@@ -74,6 +77,7 @@ class LayoutStore(context: Context) {
             .putString("mode", layoutMode.name)
             .putBoolean("runic_labels", runicLabels)
             .putInt("wall_shade", wallShade)
+            .putString("backdrop", backdrop)
             .putBoolean("initialized", true)
             .apply()
     }
@@ -150,6 +154,7 @@ class LayoutStore(context: Context) {
     fun updateLayoutMode(m: LayoutMode) { layoutMode = m; save() }
     fun updateRunicLabels(on: Boolean) { runicLabels = on; save() }
     fun updateWallShade(pct: Int) { wallShade = pct.coerceIn(0, 60); save() }
+    fun updateBackdrop(name: String) { backdrop = name; save() }
 
     fun updateColumns(c: Int) {
         if (c == columns) return

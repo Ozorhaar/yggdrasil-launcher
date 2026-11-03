@@ -213,6 +213,15 @@ fun LauncherRoot() {
                 ) { _, dy -> total += dy }
             }
     ) {
+        // backdrop painted by the launcher itself (instead of the system wallpaper layer)
+        com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.firstOrNull { it.name == layout.backdrop }?.let { w ->
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(w.res),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         // wallpaper shade: a little darker at the top (clock/status bar) and bottom (dock)
         if (layout.wallShade > 0) {
             val a = layout.wallShade / 100f
@@ -695,6 +704,16 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
                         Toast.makeText(ctx, if (ok) "${w.label} set (${target.label.lowercase()})" else "Couldn't set wallpaper", Toast.LENGTH_SHORT).show()
                     }
                 }
+            }
+        }
+
+        Section("Backdrop")
+        StatusLine("Paint the art inside the launcher instead of using the system wallpaper")
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Choice("System", layout.backdrop == "") { layout.updateBackdrop("") }
+            com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.forEach { w ->
+                Choice(w.label, layout.backdrop == w.name) { layout.updateBackdrop(w.name) }
             }
         }
 
