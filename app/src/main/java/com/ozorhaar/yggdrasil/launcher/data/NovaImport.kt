@@ -15,7 +15,7 @@ import java.util.zip.ZipInputStream
  * and Nova's own drawer button are skipped.
  */
 object NovaImport {
-    data class Result(val apps: Int, val folders: Int, val skipped: List<String>)
+    data class Result(val apps: Int, val folders: Int, val skipped: List<String>, val droppedWidgets: List<Int>)
 
     private const val DESKTOP = -100L
     private const val HOTSEAT = -101L
@@ -124,12 +124,13 @@ object NovaImport {
             extra.forEach { overflow += idx to it }
         }
 
-        layout.replaceAll(columns, pages, overflow, dock.toList(), folderMap.values.toList())
+        val dropped = layout.replaceAll(columns, pages, overflow, dock.toList(), folderMap.values.toList())
         val placed = (pages.flatMap { it.values } + dock.filterNotNull() + overflow.map { it.second })
         return Result(
             apps = placed.count { !isFolderRef(it) } + folderMap.values.sumOf { it.apps.size },
             folders = folderMap.size,
             skipped = skipped.distinct(),
+            droppedWidgets = dropped,
         )
     }
 

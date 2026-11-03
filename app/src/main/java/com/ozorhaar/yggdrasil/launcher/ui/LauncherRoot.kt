@@ -1,6 +1,10 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
 import android.app.WallpaperManager
+import android.appwidget.AppWidgetManager
+import android.appwidget.AppWidgetProviderInfo
+import android.content.Intent
+import com.ozorhaar.yggdrasil.launcher.REQ_CONFIGURE_WIDGET
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ozorhaar.yggdrasil.launcher.data.NovaImport
@@ -10,6 +14,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -147,6 +152,11 @@ fun LauncherRoot() {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf<MenuTarget?>(null) }
     var openFolder by remember { mutableStateOf<String?>(null) }
+    var homeMenu by remember { mutableStateOf(false) }
+    var widgetPicker by remember { mutableStateOf(false) }
+    var widgetMenu by remember { mutableStateOf<Int?>(null) }
+    var pendingWidget by remember { mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null) }
+    var pendingPage by remember { mutableStateOf(0) }
     val drag = remember { DragState() }
     val rootSize = remember { IntArray(2) }
 
@@ -189,6 +199,7 @@ fun LauncherRoot() {
     LaunchedEffect(Unit) {
         ygg.homePressed.collect {
             drawerOpen = false; settingsOpen = false; menu = null; openFolder = null; drag.reset()
+            homeMenu = false; widgetPicker = false; widgetMenu = null
             scope.launch { pager.animateScrollToPage(0) }
         }
     }
@@ -196,6 +207,9 @@ fun LauncherRoot() {
     BackHandler(enabled = true) {
         when {
             menu != null -> menu = null
+            widgetMenu != null -> widgetMenu = null
+            homeMenu -> homeMenu = false
+            widgetPicker -> widgetPicker = false
             openFolder != null -> openFolder = null
             settingsOpen -> settingsOpen = false
             drawerOpen -> drawerOpen = false
@@ -206,8 +220,79 @@ fun LauncherRoot() {
         ygg.repo.launch(app)
     }
 
+    // ---------------------------------------------------------- widgets
+    val widgetManager = ygg.widgetManager
+    val widgetHost = ygg.widgetHost
+
+    fun placePendingWidget() {
+        val (id, info) = pendingWidget ?: return
+        pendingWidget = null
+        val (w, h) = cellsFor(ctx, info, layout.columns, layout.rows)
+        val page = layout.addWidget(id, info.provider.flattenToString(), w, h, pendingPage)
+        scope.launch { delay(50); pager.animateScrollToPage(page) }
+    }
+
+    fun cancelPendingWidget() {
+        pendingWidget?.let { (id, _) -> runCatching { widgetHost.deleteAppWidgetId(id) } }
+        pendingWidget = null
+    }
+
+    fun configureOrPlace() {
+        val (id, info) = pendingWidget ?: return
+        val optional = info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
+        val activity = ctx as? android.app.Activity
+        if (info.configure != null && !optional && activity != null) {
+            val started = runCatching {
+                widgetHost.startAppWidgetConfigureActivityForResult(activity, id, 0, REQ_CONFIGURE_WIDGET, null)
+            }.isSuccess
+            if (!started) placePendingWidget()
+        } else placePendingWidget()
+    }
+
+    val bindLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == android.app.Activity.RESULT_OK) configureOrPlace() else cancelPendingWidget()
+    }
+    LaunchedEffect(Unit) {
+        ygg.widgetConfigResult.collect { code ->
+            if (code == android.app.Activity.RESULT_OK) placePendingWidget() else cancelPendingWidget()
+        }
+    }
+
+    fun addWidget(info: AppWidgetProviderInfo) {
+        widgetPicker = false
+        val id = widgetHost.allocateAppWidgetId()
+        pendingWidget = id to info
+        pendingPage = pager.currentPage
+        if (widgetManager.bindAppWidgetIdIfAllowed(id, info.provider)) configureOrPlace()
+        else bindLauncher.launch(
+            Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
+        )
+    }
+
+    fun removeWidget(id: Int) {
+        layout.removeWidget(id)
+        ygg.widgetViews.remove(id)
+        runCatching { widgetHost.deleteAppWidgetId(id) }
+        widgetMenu = null
+    }
+
+    /** Where a dragged widget would land: the cell nearest its top-left corner. */
+    fun updateWidgetTarget() {
+        val spot = layout.widgets.firstOrNull { it.id == drag.widgetId } ?: return
+        val page = pager.currentPage
+        val r0 = drag.cells[Loc.Home(page, 0)] ?: return
+        val tl = drag.pos - drag.grab
+        val x = ((tl.x - r0.left) / r0.width).roundToInt()
+        val y = ((tl.y - r0.top) / r0.height).roundToInt()
+        drag.widgetTarget = Triple(page, x, y)
+        drag.widgetTargetOk = layout.rectFree(page, x, y, spot.w, spot.h, ignoreWidget = spot.id)
+    }
+
     // ---------------------------------------------------------- drag and drop
     fun updateHover() {
+        if (drag.widgetId != null) { updateWidgetTarget(); return }
         val loc = drag.hit(drag.pos, pager.currentPage, null)
         drag.hover = loc
         val target = loc?.let { layout.itemAt(it) }
@@ -218,7 +303,8 @@ fun LauncherRoot() {
 
     /** True only when an actual icon (not an empty slot) is under [p]. */
     fun iconAt(p: Offset): Boolean =
-        drag.hit(p, pager.currentPage, null)?.let { layout.itemAt(it) } != null
+        drag.hit(p, pager.currentPage, null)?.let { layout.itemAt(it) } != null ||
+            drag.widgetAt(p, pager.currentPage) != null
 
     fun tapItem(loc: Loc, item: String) {
         val folder = layout.folderOf(item)
@@ -232,6 +318,18 @@ fun LauncherRoot() {
     }
 
     fun finishDrag() {
+        drag.widgetId?.let { id ->
+            val moved = (drag.pos - drag.start).getDistance() > with(density) { 14.dp.toPx() } ||
+                pager.currentPage != drag.startPage
+            if (!moved) widgetMenu = id
+            else {
+                updateWidgetTarget()
+                val t = drag.widgetTarget
+                if (t != null && drag.widgetTargetOk) layout.moveWidget(id, t.first, t.second, t.third)
+            }
+            drag.reset()
+            return
+        }
         val src = drag.src ?: return drag.reset()
         val item = drag.item ?: return drag.reset()
         val moved = (drag.pos - drag.start).getDistance() > with(density) { 14.dp.toPx() } ||
@@ -271,7 +369,7 @@ fun LauncherRoot() {
             val to = pager.currentPage + dir
             if (to < 0) continue
             if (to >= layout.pages.size) {
-                if (layout.pages.last().all { it == null }) continue
+                if (layout.pages.last().all { it == null } && layout.widgets.none { it.page == layout.pages.lastIndex }) continue
                 layout.addPage()
                 delay(32)
             }
@@ -280,7 +378,8 @@ fun LauncherRoot() {
         }
     }
 
-    val overlayOpen = drawerOpen || settingsOpen || menu != null || openFolder != null
+    val overlayOpen = drawerOpen || settingsOpen || menu != null || openFolder != null ||
+        homeMenu || widgetPicker || widgetMenu != null
 
     Box(
         Modifier
@@ -292,9 +391,12 @@ fun LauncherRoot() {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     drag.ownedGesture = false
-                    if (drawerOpen || settingsOpen || menu != null) return@awaitEachGesture
-                    val loc = drag.hit(down.position, pager.currentPage, openFolder) ?: return@awaitEachGesture
-                    val item = layout.itemAt(loc) ?: return@awaitEachGesture
+                    if (drawerOpen || settingsOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null)
+                        return@awaitEachGesture
+                    val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
+                    val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)
+                    val item = loc?.let { layout.itemAt(it) }
+                    if (widget == null && item == null) return@awaitEachGesture
 
                     // 1 = lifted (tap), 2 = moved or cancelled, null = held long enough
                     val outcome = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -308,13 +410,19 @@ fun LauncherRoot() {
                         }
                         r
                     }
-                    if (outcome == 1) { tapItem(loc, item); return@awaitEachGesture }
+                    // taps on a widget belong to the widget itself
+                    if (outcome == 1) { if (loc != null && item != null) tapItem(loc, item); return@awaitEachGesture }
                     if (outcome == 2) return@awaitEachGesture
 
                     drag.ownedGesture = true
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    drag.begin(loc, item, down.position, pager.currentPage)
-                    if (loc is Loc.InFolder) openFolder = null
+                    if (widget != null) {
+                        val r = drag.widgetRects[widget]!!.second
+                        drag.beginWidget(widget, down.position, down.position - r.topLeft, pager.currentPage)
+                    } else {
+                        drag.begin(loc!!, item!!, down.position, pager.currentPage)
+                        if (loc is Loc.InFolder) openFolder = null
+                    }
                     try {
                         while (true) {
                             val ev = awaitPointerEvent(PointerEventPass.Initial)
@@ -343,7 +451,7 @@ fun LauncherRoot() {
                     },
                     onLongPress = { p ->
                         if (drag.ownedGesture || iconAt(p)) return@detectTapGestures
-                        settingsOpen = true
+                        homeMenu = true
                     },
                 )
             }
@@ -436,6 +544,18 @@ fun LauncherRoot() {
             SettingsPanel(layout, onClose = { settingsOpen = false })
         }
 
+        if (homeMenu) HomeMenu(
+            onWidgets = { homeMenu = false; widgetPicker = true },
+            onSettings = { homeMenu = false; settingsOpen = true },
+            onClose = { homeMenu = false },
+        )
+        AnimatedVisibility(widgetPicker, enter = fadeIn(), exit = fadeOut()) {
+            WidgetPicker(layout.columns, layout.rows, onPick = { addWidget(it) }, onClose = { widgetPicker = false })
+        }
+        widgetMenu?.let { id -> layout.widgets.firstOrNull { it.id == id } }?.let { spot ->
+            WidgetSheet(spot, layout, onRemove = { removeWidget(spot.id) }, onClose = { widgetMenu = null })
+        }
+
         menu?.let { target ->
             ActionSheet(
                 target = target,
@@ -462,8 +582,9 @@ private fun SlotContent(
     iconSize: Dp,
     showLabel: Boolean,
 ) {
+    if (loc is Loc.Home && layout.isCovered(loc.page, loc.slot)) return
     val lifted = drag.active && drag.src == loc
-    val hovered = drag.active && drag.hover == loc && !lifted
+    val hovered = drag.active && drag.widgetId == null && drag.hover == loc && !lifted
     Box(contentAlignment = Alignment.TopCenter) {
         if (hovered && drag.hoverInto) {
             // drop here to gather into a folder
@@ -473,7 +594,7 @@ private fun SlotContent(
                     .background(Ygg.Gold.copy(alpha = 0.22f), CutCornerShape(iconSize * 0.18f))
                     .border(2.dp, Ygg.GoldHi, CutCornerShape(iconSize * 0.18f))
             )
-        } else if (hovered || (drag.active && item == null)) {
+        } else if (hovered || (drag.active && drag.widgetId == null && item == null)) {
             Box(
                 Modifier.padding(top = 4.dp).size(iconSize)
                     .border(
@@ -509,6 +630,8 @@ private fun HomeGrid(
         val page = layout.pages.getOrNull(pageIdx) ?: return@HorizontalPager
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
             val iconSize = minOf(maxWidth / cols * 0.62f, 60.dp)
+            val cellW = maxWidth / cols
+            val cellH = maxHeight / rows
             Column(Modifier.fillMaxSize()) {
                 for (r in 0 until rows) {
                     Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -524,6 +647,35 @@ private fun HomeGrid(
                         }
                     }
                 }
+            }
+            // widgets, laid over the cells they cover
+            layout.widgets.filter { it.page == pageIdx }.forEach { spot ->
+                key(spot.id) {
+                    val lifted = drag.active && drag.widgetId == spot.id
+                    Box(
+                        Modifier
+                            .offset(cellW * spot.x, cellH * spot.y)
+                            .size(cellW * spot.w, cellH * spot.h)
+                            .widgetCell(drag, spot.id, pageIdx)
+                            .padding(4.dp)
+                            .graphicsLayer { alpha = if (lifted) 0.35f else 1f }
+                    ) {
+                        WidgetView(spot, cellW * spot.w - 8.dp, cellH * spot.h - 8.dp)
+                    }
+                }
+            }
+            // where a dragged widget would land
+            val t = drag.widgetTarget
+            val moving = layout.widgets.firstOrNull { it.id == drag.widgetId }
+            if (drag.active && moving != null && t != null && t.first == pageIdx) {
+                Box(
+                    Modifier
+                        .offset(cellW * t.second, cellH * t.third)
+                        .size(cellW * moving.w, cellH * moving.h)
+                        .padding(4.dp)
+                        .background((if (drag.widgetTargetOk) Ygg.Gold else Ygg.Ember).copy(alpha = 0.15f), CutCornerShape(12.dp))
+                        .border(2.dp, if (drag.widgetTargetOk) Ygg.GoldHi else Ygg.Ember, CutCornerShape(12.dp))
+                )
             }
         }
     }
@@ -947,6 +1099,10 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             importScope.launch {
                 val msg = runCatching {
                     val r = NovaImport.run(ctx, uri, layout, ctx.ygg.repo.apps.value)
+                    r.droppedWidgets.forEach { id ->
+                        ctx.ygg.widgetViews.remove(id)
+                        runCatching { ctx.ygg.widgetHost.deleteAppWidgetId(id) }
+                    }
                     buildString {
                         append("Imported ${r.apps} apps in ${r.folders} folders and loose")
                         if (r.skipped.isNotEmpty()) append(". Skipped (widgets/shortcuts/not installed): ${r.skipped.joinToString()}")
@@ -1024,7 +1180,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down: notifications\nDouble-tap: lock\nHold empty space: this page\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down: notifications\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))

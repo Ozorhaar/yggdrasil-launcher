@@ -14,11 +14,23 @@ import com.ozorhaar.yggdrasil.launcher.services.BadgeService
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 
+const val WIDGET_HOST_ID = 0x7997
+const val REQ_CONFIGURE_WIDGET = 4101
+
 class YggApp : Application() {
     lateinit var repo: AppRepository
         private set
     lateinit var layout: LayoutStore
         private set
+
+    /** Hosts the home-screen widgets. */
+    lateinit var widgetHost: android.appwidget.AppWidgetHost
+        private set
+    val widgetManager: android.appwidget.AppWidgetManager by lazy { android.appwidget.AppWidgetManager.getInstance(this) }
+    /** Live widget views, reused when a page scrolls back into view. */
+    val widgetViews = HashMap<Int, android.appwidget.AppWidgetHostView>()
+    /** (resultCode) from a widget's configure screen. */
+    val widgetConfigResult = MutableSharedFlow<Int>(extraBufferCapacity = 4)
 
     /** Fires when the Home button is pressed while the launcher is already showing. */
     val homePressed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -26,6 +38,7 @@ class YggApp : Application() {
     override fun onCreate() {
         super.onCreate()
         repo = AppRepository(this)
+        widgetHost = android.appwidget.AppWidgetHost(this, WIDGET_HOST_ID)
         layout = LayoutStore(this)
         repo.start()
         if (!layout.initialized) seedDefaultLayout()

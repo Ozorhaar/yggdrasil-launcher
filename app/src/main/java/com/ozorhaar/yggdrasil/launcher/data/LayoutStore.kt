@@ -26,6 +26,18 @@ class Folder(val id: String, name: String, apps: List<String>) {
     val ref: String get() = FOLDER_PREFIX + id
 }
 
+/** A widget on a home page, covering [w] x [h] cells from column [x], row [y]. */
+class WidgetSpot(val id: Int, val provider: String, page: Int, x: Int, y: Int, w: Int, h: Int) {
+    var page by mutableStateOf(page)
+    var x by mutableStateOf(x)
+    var y by mutableStateOf(y)
+    var w by mutableStateOf(w)
+    var h by mutableStateOf(h)
+
+    fun overlaps(p: Int, ox: Int, oy: Int, ow: Int, oh: Int) =
+        p == page && ox < x + w && x < ox + ow && oy < y + h && y < oy + oh
+}
+
 const val FOLDER_PREFIX = "folder:"
 const val DEFAULT_FOLDER_NAME = "Hoard"
 fun isFolderRef(v: String?): Boolean = v?.startsWith(FOLDER_PREFIX) == true
@@ -59,6 +71,7 @@ class LayoutStore(context: Context) {
     val pages: SnapshotStateList<SnapshotStateList<String?>> = mutableStateListOf()
     val dock: SnapshotStateList<String?> = mutableStateListOf()
     val folders = mutableStateMapOf<String, Folder>()
+    val widgets: SnapshotStateList<WidgetSpot> = mutableStateListOf()
 
     val initialized: Boolean get() = prefs.getBoolean("initialized", false)
 
@@ -74,6 +87,17 @@ class LayoutStore(context: Context) {
                 val f = obj.getJSONObject(id)
                 val list = f.optJSONArray("apps") ?: JSONArray()
                 folders[id] = Folder(id, f.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) })
+            }
+        }
+        widgets.clear()
+        prefs.getString("widgets", null)?.let { raw ->
+            val arr = JSONArray(raw)
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                widgets += WidgetSpot(
+                    o.getInt("id"), o.optString("provider"), o.getInt("page"),
+                    o.getInt("x"), o.getInt("y"), o.getInt("w"), o.getInt("h"),
+                )
             }
         }
         fun clean(v: String?): String? = if (isFolderRef(v) && folderOf(v) == null) null else v
@@ -107,7 +131,15 @@ class LayoutStore(context: Context) {
         folders.values.forEach { folder ->
             f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList())))
         }
+        val wj = JSONArray()
+        widgets.forEach { s ->
+            wj.put(
+                JSONObject().put("id", s.id).put("provider", s.provider).put("page", s.page)
+                    .put("x", s.x).put("y", s.y).put("w", s.w).put("h", s.h)
+            )
+        }
         prefs.edit()
+            .putString("widgets", wj.toString())
             .putString("pages", arr.toString())
             .putString("dock", d.toString())
             .putString("folders", f.toString())
@@ -138,6 +170,17 @@ class LayoutStore(context: Context) {
         }
     }
 
+    /** True when a widget sits over this home slot. */
+    fun isCovered(page: Int, slot: Int): Boolean =
+        widgets.any { it.overlaps(page, slot % columns, slot / columns, 1, 1) }
+
+    /** True when the w x h block at x,y on [page] has no icons and no other widget. */
+    fun rectFree(page: Int, x: Int, y: Int, w: Int, h: Int, ignoreWidget: Int? = null): Boolean {
+        if (page !in pages.indices || x < 0 || y < 0 || x + w > columns || y + h > rows) return false
+        for (cy in y until y + h) for (cx in x until x + w) if (pages[page][cy * columns + cx] != null) return false
+        return widgets.none { it.id != ignoreWidget && it.overlaps(page, x, y, w, h) }
+    }
+
     private fun holds(ref: String?, key: String) = ref == key || folderOf(ref)?.apps?.contains(key) == true
 
     /** True if the app is on a home page, directly or inside a folder there. */
@@ -156,7 +199,7 @@ class LayoutStore(context: Context) {
         val start = preferredPage.coerceIn(0, pages.lastIndex)
         val order = (start until pages.size) + (0 until start)
         for (p in order) {
-            val idx = pages[p].indexOfFirst { it == null }
+            val idx = pages[p].indices.firstOrNull { pages[p][it] == null && !isCovered(p, it) } ?: -1
             if (idx >= 0) {
                 pages[p][idx] = item; return
             }
@@ -197,7 +240,8 @@ class LayoutStore(context: Context) {
     }
 
     private fun trimEmptyPages() {
-        while (pages.size > 1 && pages.last().all { it == null }) pages.removeAt(pages.lastIndex)
+        while (pages.size > 1 && pages.last().all { it == null } && widgets.none { it.page == pages.lastIndex })
+            pages.removeAt(pages.lastIndex)
     }
 
     /**
@@ -207,6 +251,7 @@ class LayoutStore(context: Context) {
      */
     fun drop(src: Loc, dst: Loc, intoFolder: Boolean) {
         if (src == dst || dst is Loc.InFolder) return
+        if (dst is Loc.Home && isCovered(dst.page, dst.slot)) return
         val dragged = itemAt(src) ?: return
         val target = itemAt(dst)
         val srcFolder = (src as? Loc.InFolder)?.let { folders[it.id] }
@@ -236,6 +281,46 @@ class LayoutStore(context: Context) {
         srcFolder?.let { dissolveIfSmall(it) }
         trimEmptyPages()
         save()
+    }
+
+    // ------------------------------------------------------------ widgets
+    /** Puts a widget in the first block of free cells, preferring [preferredPage]. Returns its page. */
+    fun addWidget(id: Int, provider: String, w: Int, h: Int, preferredPage: Int): Int {
+        val ww = w.coerceIn(1, columns)
+        val hh = h.coerceIn(1, rows)
+        val start = preferredPage.coerceIn(0, pages.lastIndex)
+        for (p in (start until pages.size) + (0 until start)) {
+            for (y in 0..rows - hh) for (x in 0..columns - ww) {
+                if (rectFree(p, x, y, ww, hh)) {
+                    widgets += WidgetSpot(id, provider, p, x, y, ww, hh); save(); return p
+                }
+            }
+        }
+        pages.add(emptyPage())
+        widgets += WidgetSpot(id, provider, pages.lastIndex, 0, 0, ww, hh)
+        save()
+        return pages.lastIndex
+    }
+
+    fun moveWidget(id: Int, page: Int, x: Int, y: Int): Boolean {
+        val s = widgets.firstOrNull { it.id == id } ?: return false
+        if (!rectFree(page, x, y, s.w, s.h, ignoreWidget = id)) return false
+        s.page = page; s.x = x; s.y = y
+        trimEmptyPages(); save()
+        return true
+    }
+
+    fun resizeWidget(id: Int, w: Int, h: Int): Boolean {
+        val s = widgets.firstOrNull { it.id == id } ?: return false
+        if (w < 1 || h < 1 || !rectFree(s.page, s.x, s.y, w, h, ignoreWidget = id)) return false
+        s.w = w; s.h = h
+        save()
+        return true
+    }
+
+    fun removeWidget(id: Int) {
+        widgets.removeAll { it.id == id }
+        trimEmptyPages(); save()
     }
 
     fun renameFolder(id: String, name: String) {
@@ -296,8 +381,9 @@ class LayoutStore(context: Context) {
         if (c == columns) return
         val items = pages.flatMap { it.filterNotNull() }
         columns = c
+        widgets.forEach { s -> s.w = s.w.coerceAtMost(c); s.x = s.x.coerceAtMost(c - s.w) }
         pages.clear()
-        pages.add(emptyPage())
+        repeat((widgets.maxOfOrNull { it.page } ?: 0) + 1) { pages.add(emptyPage()) }
         items.forEach { placeAnywhere(it) }
         save()
     }
@@ -309,7 +395,9 @@ class LayoutStore(context: Context) {
         overflow: List<Pair<Int, String>>,
         newDock: List<String?>,
         newFolders: List<Folder>,
-    ) {
+    ): List<Int> {
+        val dropped = widgets.map { it.id }
+        widgets.clear()
         columns = newColumns
         folders.clear()
         newFolders.forEach { folders[it.id] = it }
@@ -320,6 +408,7 @@ class LayoutStore(context: Context) {
         dock.indices.forEach { dock[it] = newDock.getOrNull(it) }
         trimEmptyPages()
         save()
+        return dropped
     }
 
     fun seedDefaults(home: List<String>, dockApps: List<String>) {

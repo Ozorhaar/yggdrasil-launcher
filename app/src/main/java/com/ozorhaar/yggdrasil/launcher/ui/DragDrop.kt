@@ -45,6 +45,26 @@ class DragState {
     /** Screen bounds of every slot currently on screen. */
     val cells = HashMap<Loc, Rect>()
 
+    /** Widget id -> (page, screen bounds). */
+    val widgetRects = HashMap<Int, Pair<Int, Rect>>()
+    /** Set while a widget (not an icon) is being dragged. */
+    var widgetId by mutableStateOf<Int?>(null)
+    /** Finger position relative to the widget's top-left corner when it was picked up. */
+    var grab = Offset.Zero
+    /** Where the widget would land: page, column, row. */
+    var widgetTarget by mutableStateOf<Triple<Int, Int, Int>?>(null)
+    var widgetTargetOk by mutableStateOf(false)
+
+    fun widgetAt(p: Offset, page: Int): Int? =
+        widgetRects.entries.firstOrNull { (_, v) -> v.first == page && v.second.contains(p) }?.key
+
+    fun beginWidget(id: Int, at: Offset, grabOffset: Offset, page: Int) {
+        src = null; item = null; widgetId = id; grab = grabOffset
+        pos = at; start = at; startPage = page
+        hover = null; hoverInto = false; widgetTarget = null; widgetTargetOk = false
+        active = true
+    }
+
     fun begin(loc: Loc, what: String, at: Offset, page: Int) {
         src = loc; item = what; pos = at; start = at; startPage = page
         hover = null; hoverInto = false; active = true
@@ -52,6 +72,7 @@ class DragState {
 
     fun reset() {
         active = false; src = null; item = null; hover = null; hoverInto = false
+        widgetId = null; widgetTarget = null; widgetTargetOk = false
     }
 
     /** The slot under [p]. With a folder open only its slots count; otherwise the current page and the dock. */
