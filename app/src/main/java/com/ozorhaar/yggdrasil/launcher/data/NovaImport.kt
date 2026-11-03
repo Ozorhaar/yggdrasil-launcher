@@ -6,6 +6,7 @@ import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.os.Process
+import com.ozorhaar.yggdrasil.launcher.ygg
 import java.io.File
 import java.util.zip.ZipInputStream
 
@@ -22,6 +23,7 @@ object NovaImport {
     private const val TYPE_APP = 0
     private const val TYPE_SHORTCUT = 1
     private const val TYPE_FOLDER = 2
+    private const val TYPE_DEEP_SHORTCUT = 6
 
     private class Row(
         val id: Long, val title: String, val intent: String?, val container: Long,
@@ -56,13 +58,26 @@ object NovaImport {
             return (byComponent[comp] ?: byPackage[comp.packageName]?.firstOrNull())?.key
         }
 
+        val repo = ctx.ygg.repo
+        /** Nova's app shortcuts (Assist, a calendar...): pin the same shortcut here. */
+        fun shortcutKey(r: Row): String? {
+            val intent = r.intent?.let { runCatching { Intent.parseUri(it, 0) }.getOrNull() } ?: return null
+            val pkg = intent.`package` ?: intent.component?.packageName ?: return null
+            val id = intent.getStringExtra("shortcut_id") ?: return null
+            return repo.findShortcut(pkg, id)?.let { repo.pin(it) }
+        }
+
         // folders first: folder id -> its apps in Nova's order
         val folderMap = mutableMapOf<Long, Folder>()
         val loneApp = mutableMapOf<Long, String?>()
         rows.filter { it.type == TYPE_FOLDER }.forEach { f ->
             val kids = rows.filter { it.container == f.id }.sortedWith(compareBy({ it.rank }, { it.y }, { it.x }))
             val keys = kids.mapNotNull { k ->
-                val key = if (k.type == TYPE_APP || k.type == TYPE_SHORTCUT) appKey(k) else null
+                val key = when (k.type) {
+                    TYPE_APP, TYPE_SHORTCUT -> appKey(k)
+                    TYPE_DEEP_SHORTCUT -> shortcutKey(k)
+                    else -> null
+                }
                 if (key == null && k.title.isNotBlank()) skipped += k.title
                 key
             }.distinct()
@@ -75,12 +90,13 @@ object NovaImport {
         fun itemFor(r: Row): String? = when (r.type) {
             TYPE_FOLDER -> folderMap[r.id]?.ref ?: loneApp[r.id]
             TYPE_APP, TYPE_SHORTCUT -> appKey(r).also { if (it == null && r.title.isNotBlank() && r.title != "Apps") skipped += r.title }
+            TYPE_DEEP_SHORTCUT -> shortcutKey(r).also { if (it == null && r.title.isNotBlank()) skipped += r.title }
             else -> { if (r.title.isNotBlank()) skipped += r.title; null } // widgets, deep shortcuts
         }
 
         // home pages: one per Nova screen, positions kept, shifted up into our 6 rows
         val desktop = rows.filter { it.container == DESKTOP }
-        val iconRows = desktop.filter { it.type == TYPE_APP || it.type == TYPE_SHORTCUT || it.type == TYPE_FOLDER }
+        val iconRows = desktop.filter { it.type == TYPE_APP || it.type == TYPE_SHORTCUT || it.type == TYPE_FOLDER || it.type == TYPE_DEEP_SHORTCUT }
         val columns = if ((iconRows.maxOfOrNull { it.x } ?: 3) >= 4) 5 else 4
         val pages = mutableListOf<Map<Int, String>>()
         val overflow = mutableListOf<Pair<Int, String>>()

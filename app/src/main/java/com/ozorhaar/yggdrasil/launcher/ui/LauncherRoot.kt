@@ -141,11 +141,15 @@ fun LauncherRoot() {
     val layout = ygg.layout
     val apps by ygg.repo.apps.collectAsStateWithLifecycle()
     val badges by Badges.counts.collectAsStateWithLifecycle()
-    val byKey = remember(apps) { apps.associateBy { it.key } }
+    val pinnedShortcuts by ygg.repo.shortcuts.collectAsStateWithLifecycle()
+    val byKey = remember(apps, pinnedShortcuts) { (apps + pinnedShortcuts).associateBy { it.key } }
     val byKeyNow by rememberUpdatedState(byKey)
 
     val density = LocalDensity.current
-    val icons = remember { ShieldIcons(with(density) { 64.dp.roundToPx() }) }
+    val icons = remember {
+        val dpi = ctx.resources.displayMetrics.densityDpi
+        ShieldIcons(with(density) { 64.dp.roundToPx() }) { ygg.repo.iconFor(it, dpi) }
+    }
     val haptic = LocalHapticFeedback.current
 
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
@@ -164,7 +168,7 @@ fun LauncherRoot() {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(apps) {
-        if (apps.isNotEmpty()) layout.prune(apps.map { it.key }.toSet())
+        if (apps.isNotEmpty()) layout.prune(apps.map { it.key }.toSet(), apps.map { it.packageName }.toSet())
     }
     // a folder that dissolved (or was ungrouped) closes itself
     openFolder?.let { if (!layout.folders.containsKey(it)) openFolder = null }
@@ -1037,12 +1041,40 @@ private fun ActionSheet(
                 RuneText(app.label, 22.sp, Ygg.Gold)
             }
             Spacer(Modifier.height(10.dp))
-            if (onHome) SheetItem("Remove from home") { layout.removeFromHome(app.key); onDismiss() }
-            else SheetItem("Add to home") { layout.addToHome(app.key); onDismiss() }
-            if (inDock) SheetItem("Unpin from dock") { layout.unpinFromDock(app.key); onDismiss() }
+            val repo = ctx.ygg.repo
+            // the app's own shortcuts (Home Assistant's Assist, a contact, a new message...)
+            val shortcuts = remember(app.key) { repo.shortcutsFor(app) }
+            if (shortcuts.isNotEmpty()) {
+                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    shortcuts.forEach { sc ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { repo.launchShortcut(sc); onDismiss() }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(8.dp).rotate(45f).background(Ygg.Frost))
+                            Spacer(Modifier.width(12.dp))
+                            Box(Modifier.weight(1f)) { RuneText((sc.shortLabel ?: sc.id).toString(), 17.sp, Ygg.Frost) }
+                            RuneButton("+ Home") {
+                                repo.pin(sc)?.let { key ->
+                                    layout.addToHome(key)
+                                    Toast.makeText(ctx, "${sc.shortLabel ?: sc.id} added to home", Toast.LENGTH_SHORT).show()
+                                }
+                                onDismiss()
+                            }
+                        }
+                    }
+                }
+                Canvas(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(6.dp)) {
+                    drawLine(Ygg.Gold.copy(alpha = 0.35f), Offset(0f, size.height), Offset(size.width, 0f), strokeWidth = 2f)
+                }
+            }
+            fun dropIfUnused() { if (app.isShortcut && !layout.isPlaced(app.key)) repo.unpin(app.key) }
+            if (onHome) SheetItem("Remove from home") { layout.removeFromHome(app.key); dropIfUnused(); onDismiss() }
+            else if (!app.isShortcut) SheetItem("Add to home") { layout.addToHome(app.key); onDismiss() }
+            if (inDock) SheetItem("Unpin from dock") { layout.unpinFromDock(app.key); dropIfUnused(); onDismiss() }
             else if (layout.dock.any { it == null }) SheetItem("Pin to dock") { layout.pinToDock(app.key); onDismiss() }
-            SheetItem("App info") { ctx.ygg.repo.openAppInfo(app); onDismiss() }
-            SheetItem("Uninstall", Ygg.Ember) { ctx.uninstall(app.packageName); onDismiss() }
+            SheetItem("App info") { repo.openAppInfo(app); onDismiss() }
+            if (!app.isShortcut) SheetItem("Uninstall", Ygg.Ember) { ctx.uninstall(app.packageName); onDismiss() }
         }
     }
 }

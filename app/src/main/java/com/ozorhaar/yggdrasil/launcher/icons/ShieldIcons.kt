@@ -20,7 +20,7 @@ import kotlin.math.abs
  * iron. Apps that ship a monochrome (themed) icon get a clean carved glyph; the
  * rest get their own icon inlaid in the shield, toned down to match.
  */
-class ShieldIcons(private val sizePx: Int) {
+class ShieldIcons(private val sizePx: Int, private val iconOf: (AppEntry) -> Drawable?) {
 
     private val cache = LruCache<String, ImageBitmap>(400)
 
@@ -52,7 +52,7 @@ class ShieldIcons(private val sizePx: Int) {
         c.drawCircle(cx, cx, s * 0.375f, p)
 
         val icon: Drawable? = try {
-            app.info.getIcon(0)
+            iconOf(app)
         } catch (_: Exception) {
             null
         }

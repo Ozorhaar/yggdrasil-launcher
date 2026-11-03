@@ -358,14 +358,15 @@ class LayoutStore(context: Context) {
         return id
     }
 
-    /** Drops apps that were uninstalled. */
-    fun prune(valid: Set<String>) {
+    /** Drops apps that were uninstalled (and shortcuts whose app was). */
+    fun prune(valid: Set<String>, packages: Set<String>) {
+        fun gone(v: String) = if (isShortcutRef(v)) shortcutPackage(v) !in packages else v !in valid
         var changed = false
         folders.values.toList().forEach { f ->
-            if (f.apps.removeAll { it !in valid }) changed = true
+            if (f.apps.removeAll { gone(it) }) changed = true
             if (f.apps.size < 2) { dissolveIfSmall(f); changed = true }
         }
-        fun bad(v: String?) = v != null && !isFolderRef(v) && v !in valid
+        fun bad(v: String?) = v != null && !isFolderRef(v) && gone(v)
         pages.forEach { page -> page.indices.forEach { i -> if (bad(page[i])) { page[i] = null; changed = true } } }
         dock.indices.forEach { i -> if (bad(dock[i])) { dock[i] = null; changed = true } }
         if (changed) { trimEmptyPages(); save() }
