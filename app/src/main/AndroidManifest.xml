@@ -21,6 +21,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Yggdrasil">
 
+        <!-- Samsung One UI hint (Nova Launcher declares this too). -->
+        <meta-data
+            android:name="com.samsung.android.non_immersive"
+            android:value="true" />
+
         <activity
             android:name=".MainActivity"
             android:clearTaskOnLaunch="true"
