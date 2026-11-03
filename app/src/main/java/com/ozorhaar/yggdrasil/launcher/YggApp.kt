@@ -12,6 +12,7 @@ import com.ozorhaar.yggdrasil.launcher.data.AppRepository
 import com.ozorhaar.yggdrasil.launcher.data.LayoutStore
 import com.ozorhaar.yggdrasil.launcher.services.BadgeService
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.launch
 
 class YggApp : Application() {
     lateinit var repo: AppRepository
@@ -28,6 +29,18 @@ class YggApp : Application() {
         layout = LayoutStore(this)
         repo.start()
         if (!layout.initialized) seedDefaultLayout()
+        seedWallpapersOnce()
+    }
+
+    /** First run: Fjord on the home screen, World Tree on the lock screen. */
+    private fun seedWallpapersOnce() {
+        val prefs = getSharedPreferences("yggdrasil_layout", MODE_PRIVATE)
+        if (prefs.getBoolean("wallpapers_seeded", false)) return
+        prefs.edit().putBoolean("wallpapers_seeded", true).apply()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            applyYggWallpaper(YggWallpaper.FJORD, WallTarget.HOME)
+            applyYggWallpaper(YggWallpaper.WORLD_TREE, WallTarget.LOCK)
+        }
     }
 
     /** First run: phone, messages, browser, camera in the dock; a few staples on page one. */

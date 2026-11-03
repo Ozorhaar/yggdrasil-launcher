@@ -3,6 +3,7 @@
 
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>

@@ -84,6 +84,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ozorhaar.yggdrasil.launcher.applyYggWallpaper
 import com.ozorhaar.yggdrasil.launcher.badgeAccessGranted
 import com.ozorhaar.yggdrasil.launcher.data.AppEntry
 import com.ozorhaar.yggdrasil.launcher.data.LayoutMode
@@ -677,6 +678,26 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             Choice("5", layout.columns == 5) { layout.updateColumns(5) }
         }
 
+        Section("Yggdrasil wallpapers")
+        var target by remember { mutableStateOf(com.ozorhaar.yggdrasil.launcher.WallTarget.HOME) }
+        val scope = rememberCoroutineScope()
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.ozorhaar.yggdrasil.launcher.WallTarget.entries.forEach { t ->
+                Choice(t.label, target == t) { target = t }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.forEach { w ->
+                WallThumb(w) {
+                    scope.launch {
+                        val ok = ctx.applyYggWallpaper(w, target)
+                        Toast.makeText(ctx, if (ok) "${w.label} set (${target.label.lowercase()})" else "Couldn't set wallpaper", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
         Section("Wallpaper shade")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(0, 15, 30, 45, 60).forEach { pct ->
@@ -717,6 +738,20 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+@Composable
+private fun WallThumb(w: com.ozorhaar.yggdrasil.launcher.YggWallpaper, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(w.res),
+            contentDescription = w.label,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.width(84.dp).height(170.dp)
+                .border(1.dp, Ygg.Gold.copy(alpha = 0.7f), CutCornerShape(8.dp)),
+        )
+        RuneText(w.label, 14.sp, Ygg.Bone)
     }
 }
 

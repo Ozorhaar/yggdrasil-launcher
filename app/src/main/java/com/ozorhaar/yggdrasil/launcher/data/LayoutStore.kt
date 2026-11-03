@@ -29,7 +29,7 @@ class LayoutStore(context: Context) {
     var runicLabels by mutableStateOf(prefs.getBoolean("runic_labels", true))
         private set
     /** How much to darken the wallpaper, 0-60 (percent). One UI and Nova dim it too. */
-    var wallShade by mutableStateOf(prefs.getInt("wall_shade", 30))
+    var wallShade by mutableStateOf(prefs.getInt("wall_shade", 0))
         private set
 
     val pages: SnapshotStateList<SnapshotStateList<String?>> = mutableStateListOf()
