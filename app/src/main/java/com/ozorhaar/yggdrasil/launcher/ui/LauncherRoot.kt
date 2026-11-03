@@ -157,7 +157,10 @@ fun LauncherRoot() {
                 detectTapGestures(
                     onDoubleTap = {
                         if (!LockService.lockScreen()) {
-                            Toast.makeText(ctx, "Turn on “Yggdrasil double-tap to lock” in Accessibility", Toast.LENGTH_LONG).show()
+                            val msg = if (LockService.isEnabledInSettings(ctx))
+                                "Lock service is on but not running yet. Switch it off and on in Accessibility."
+                            else "Turn on “Yggdrasil double-tap to lock” in Accessibility"
+                            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
                         }
                     },
                     onLongPress = { settingsOpen = true },
@@ -638,7 +641,13 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         RuneButton("Open notification access") { ctx.openSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }
 
         Section("Double-tap to lock")
-        StatusLine(if (LockService.enabled) "On" else "Turn on “Yggdrasil double-tap to lock”")
+        StatusLine(
+            when {
+                LockService.running -> "On"
+                LockService.isEnabledInSettings(ctx) -> "Switched on, waiting for Android to start it"
+                else -> "Turn on “Yggdrasil double-tap to lock”"
+            }
+        )
         RuneButton("Open accessibility") { ctx.openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS) }
 
         Section("Default home app")
