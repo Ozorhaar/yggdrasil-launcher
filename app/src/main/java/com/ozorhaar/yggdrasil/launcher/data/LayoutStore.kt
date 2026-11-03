@@ -28,6 +28,9 @@ class LayoutStore(context: Context) {
         private set
     var runicLabels by mutableStateOf(prefs.getBoolean("runic_labels", true))
         private set
+    /** How much to darken the wallpaper, 0-60 (percent). One UI and Nova dim it too. */
+    var wallShade by mutableStateOf(prefs.getInt("wall_shade", 30))
+        private set
 
     val pages: SnapshotStateList<SnapshotStateList<String?>> = mutableStateListOf()
     val dock: SnapshotStateList<String?> = mutableStateListOf()
@@ -70,6 +73,7 @@ class LayoutStore(context: Context) {
             .putInt("columns", columns)
             .putString("mode", layoutMode.name)
             .putBoolean("runic_labels", runicLabels)
+            .putInt("wall_shade", wallShade)
             .putBoolean("initialized", true)
             .apply()
     }
@@ -145,6 +149,7 @@ class LayoutStore(context: Context) {
     // ------------------------------------------------------------ settings
     fun updateLayoutMode(m: LayoutMode) { layoutMode = m; save() }
     fun updateRunicLabels(on: Boolean) { runicLabels = on; save() }
+    fun updateWallShade(pct: Int) { wallShade = pct.coerceIn(0, 60); save() }
 
     fun updateColumns(c: Int) {
         if (c == columns) return

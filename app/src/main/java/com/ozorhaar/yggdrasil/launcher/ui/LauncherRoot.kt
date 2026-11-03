@@ -178,6 +178,20 @@ fun LauncherRoot() {
                 ) { _, dy -> total += dy }
             }
     ) {
+        // wallpaper shade: a little darker at the top (clock/status bar) and bottom (dock)
+        if (layout.wallShade > 0) {
+            val a = layout.wallShade / 100f
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = (a * 1.3f).coerceAtMost(0.85f)),
+                        0.35f to Color.Black.copy(alpha = a * 0.8f),
+                        0.7f to Color.Black.copy(alpha = a * 0.9f),
+                        1f to Color.Black.copy(alpha = (a * 1.4f).coerceAtMost(0.9f)),
+                    )
+                )
+            )
+        }
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (layout.layoutMode) {
@@ -627,6 +641,13 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Choice("4", layout.columns == 4) { layout.updateColumns(4) }
             Choice("5", layout.columns == 5) { layout.updateColumns(5) }
+        }
+
+        Section("Wallpaper shade")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            listOf(0, 15, 30, 45, 60).forEach { pct ->
+                Choice(if (pct == 0) "Off" else "$pct%", layout.wallShade == pct) { layout.updateWallShade(pct) }
+            }
         }
 
         Section("Runic labels")
