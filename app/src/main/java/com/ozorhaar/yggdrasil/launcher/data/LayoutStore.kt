@@ -302,6 +302,26 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** Replaces the whole home layout (used by the Nova import). */
+    fun replaceAll(
+        newColumns: Int,
+        newPages: List<Map<Int, String>>,
+        overflow: List<Pair<Int, String>>,
+        newDock: List<String?>,
+        newFolders: List<Folder>,
+    ) {
+        columns = newColumns
+        folders.clear()
+        newFolders.forEach { folders[it.id] = it }
+        pages.clear()
+        newPages.forEach { m -> pages.add(emptyPage().also { p -> m.forEach { (slot, item) -> if (slot in p.indices) p[slot] = item } }) }
+        if (pages.isEmpty()) pages.add(emptyPage())
+        overflow.forEach { (page, item) -> placeAnywhere(item, page) }
+        dock.indices.forEach { dock[it] = newDock.getOrNull(it) }
+        trimEmptyPages()
+        save()
+    }
+
     fun seedDefaults(home: List<String>, dockApps: List<String>) {
         dockApps.take(dockSize).forEachIndexed { i, k -> dock[i] = k }
         home.forEach { addToHome(it) }

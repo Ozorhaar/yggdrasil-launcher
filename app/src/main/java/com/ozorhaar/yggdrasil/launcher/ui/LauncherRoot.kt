@@ -1,6 +1,9 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
 import android.app.WallpaperManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.ozorhaar.yggdrasil.launcher.data.NovaImport
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -935,6 +938,25 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             Choice("4", layout.columns == 4) { layout.updateColumns(4) }
             Choice("5", layout.columns == 5) { layout.updateColumns(5) }
         }
+
+        Section("Import from Nova")
+        StatusLine("Rebuilds this home screen, folders and dock from a Nova backup (.novabackup). Replaces the current layout.")
+        val importScope = rememberCoroutineScope()
+        val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            importScope.launch {
+                val msg = runCatching {
+                    val r = NovaImport.run(ctx, uri, layout, ctx.ygg.repo.apps.value)
+                    buildString {
+                        append("Imported ${r.apps} apps in ${r.folders} folders and loose")
+                        if (r.skipped.isNotEmpty()) append(". Skipped (widgets/shortcuts/not installed): ${r.skipped.joinToString()}")
+                    }
+                }.getOrElse { "Import failed: ${it.message}" }
+                Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+                onClose()
+            }
+        }
+        RuneButton("Choose Nova backup") { picker.launch(arrayOf("*/*")) }
 
         Section("Yggdrasil wallpapers")
         var target by remember { mutableStateOf(com.ozorhaar.yggdrasil.launcher.WallTarget.HOME) }
