@@ -8,6 +8,9 @@ import com.ozorhaar.yggdrasil.launcher.REQ_CONFIGURE_WIDGET
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ozorhaar.yggdrasil.launcher.data.NovaImport
+import com.ozorhaar.yggdrasil.launcher.bifrost.Bridge
+import com.ozorhaar.yggdrasil.launcher.bifrost.BridgeGem
+import com.ozorhaar.yggdrasil.launcher.bifrost.rememberBridge
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -132,6 +135,8 @@ import com.ozorhaar.yggdrasil.launcher.uninstall
 import com.ozorhaar.yggdrasil.launcher.ygg
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -171,6 +176,9 @@ fun LauncherRoot() {
     var pendingPage by remember { mutableStateOf(0) }
     val drag = remember { DragState() }
     var dockRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var bridgeRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    val bridge by rememberBridge()
+    val bridgeScope = rememberCoroutineScope()
     val rootSize = remember { IntArray(2) }
 
     val pager = rememberPagerState(pageCount = { layout.pages.size })
@@ -482,6 +490,12 @@ fun LauncherRoot() {
                 detectTapGestures(
                     // a tap on the dock's rune band (not an icon) wakes Hafnir
                     onTap = { p ->
+                        // the bridge mark on the band opens Bifrost
+                        if (bridge != null && bridgeRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            Bridge.open(ctx)
+                            return@detectTapGestures
+                        }
                         if (iconAt(p) || !dockRect.contains(p)) return@detectTapGestures
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         ctx.openAssistant()
@@ -496,6 +510,19 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
+                        // hold the bridge mark: lower or raise the bridge
+                        val b = bridge
+                        if (b != null && bridgeRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            bridgeScope.launch {
+                                val ok = withContext(Dispatchers.IO) { Bridge.call(ctx, if (b.wanted) "lower" else "raise") }
+                                when {
+                                    ok -> Toast.makeText(ctx, if (b.wanted) "Bifrost: bridge lowered" else "Bifrost: bridge raised", Toast.LENGTH_SHORT).show()
+                                    else -> Bridge.open(ctx)
+                                }
+                            }
+                            return@detectTapGestures
+                        }
                         if (drag.ownedGesture || iconAt(p)) return@detectTapGestures
                         homeMenu = true
                     },
@@ -543,7 +570,7 @@ fun LauncherRoot() {
                 }
             }
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
-            Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it })
+            Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it })
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -770,25 +797,36 @@ private fun Dock(
     badges: Map<String, Int>,
     drag: DragState,
     onPlaced: (androidx.compose.ui.geometry.Rect) -> Unit,
+    bridge: Bridge.Info? = null,
+    onBridgePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
-    Row(
-        Modifier
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .onGloballyPositioned { onPlaced(it.boundsInRoot()) }
-            .fillMaxWidth()
-            .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
-            .then(
-                if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Ygg.Gold).padding(horizontal = 12.dp, vertical = 14.dp)
-                else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
-            ),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        layout.dock.forEachIndexed { i, key ->
-            val loc = Loc.Dock(i)
-            Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
-                SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
+    Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()) {
+        Row(
+            Modifier
+                .onGloballyPositioned { onPlaced(it.boundsInRoot()) }
+                .fillMaxWidth()
+                .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
+                .then(
+                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Ygg.Gold).padding(horizontal = 12.dp, vertical = 14.dp)
+                    else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
+                ),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            layout.dock.forEachIndexed { i, key ->
+                val loc = Loc.Dock(i)
+                Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
+                    SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
+                }
             }
+        }
+        // Bifrost's mark, set into the top of the band (only when Bifrost is installed)
+        if (bridge != null) {
+            BridgeGem(
+                bridge,
+                Modifier.align(Alignment.TopCenter).offset(y = (-12).dp)
+                    .onGloballyPositioned { onBridgePlaced(it.boundsInRoot()) },
+            )
         }
     }
 }

@@ -12,8 +12,12 @@
     <!-- optional: people in search; only asked for if you turn it on, and they never leave the phone -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- Bifrost's bridge state and lower/raise; only granted because both apps carry the Yggdrasil key -->
+    <uses-permission android:name="com.ozorhaar.bifrost.permission.BRIDGE" />
+
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>
+        <package android:name="com.ozorhaar.bifrost" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
