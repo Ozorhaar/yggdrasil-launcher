@@ -559,6 +559,8 @@ fun LauncherRoot() {
                 onLaunch = { drawerOpen = false; launch(it) },
                 onLong = { menu = MenuTarget(it, From.DRAWER) },
                 onClose = { drawerOpen = false },
+                onWidgets = { drawerOpen = false; widgetPicker = true },
+                onSettings = { drawerOpen = false; settingsOpen = true },
             )
         }
 
@@ -958,6 +960,8 @@ private fun AppDrawer(
     onLaunch: (AppEntry) -> Unit,
     onLong: (AppEntry) -> Unit,
     onClose: () -> Unit,
+    onWidgets: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -1014,6 +1018,11 @@ private fun AppDrawer(
             )
             Spacer(Modifier.width(12.dp))
             RuneButton("Close") { keyboard?.hide(); onClose() }
+        }
+        // always reachable, even when the home screen has no empty space to hold
+        Row(Modifier.padding(start = 16.dp, top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            RuneButton("Widgets") { keyboard?.hide(); onWidgets() }
+            RuneButton("Settings") { keyboard?.hide(); onSettings() }
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(4),
