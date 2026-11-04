@@ -123,12 +123,23 @@ fun Context.uninstall(packageName: String) {
     }
 }
 
-/** Opens whatever assistant the phone is set to use (Hafnir, once it exists). */
+/**
+ * Wakes Hafnir straight into listening (same as the assist gesture). Falls back to whatever
+ * assistant the phone is set to use if Hafnir isn't installed or is too old to have the listen door.
+ */
 fun Context.openAssistant() {
-    for (action in listOf(Intent.ACTION_VOICE_COMMAND, Intent.ACTION_ASSIST)) {
+    val tries = listOf(
+        Intent(HAFNIR_LISTEN).setPackage(HAFNIR_PACKAGE),
+        Intent(Intent.ACTION_VOICE_COMMAND),
+        Intent(Intent.ACTION_ASSIST),
+    )
+    for (intent in tries) {
         try {
-            startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return
         } catch (_: Exception) {
         }
     }
 }
+
+const val HAFNIR_PACKAGE = "com.ozorhaar.hafnir"
+const val HAFNIR_LISTEN = "com.ozorhaar.hafnir.action.LISTEN"

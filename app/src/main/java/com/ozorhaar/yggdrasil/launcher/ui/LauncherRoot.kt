@@ -18,6 +18,7 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
@@ -163,6 +164,7 @@ fun LauncherRoot() {
     var pendingWidget by remember { mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null) }
     var pendingPage by remember { mutableStateOf(0) }
     val drag = remember { DragState() }
+    var dockRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val rootSize = remember { IntArray(2) }
 
     val pager = rememberPagerState(pageCount = { layout.pages.size })
@@ -463,6 +465,12 @@ fun LauncherRoot() {
             .pointerInput(overlayOpen) {
                 if (overlayOpen) return@pointerInput
                 detectTapGestures(
+                    // a tap on the dock's rune band (not an icon) wakes Hafnir
+                    onTap = { p ->
+                        if (iconAt(p) || !dockRect.contains(p)) return@detectTapGestures
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        ctx.openAssistant()
+                    },
                     onDoubleTap = { p ->
                         if (iconAt(p)) return@detectTapGestures
                         if (!LockService.lockScreen()) {
@@ -517,7 +525,7 @@ fun LauncherRoot() {
                 }
             }
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
-            Dock(layout, byKey, icons, badges, drag)
+            Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it })
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -729,10 +737,12 @@ private fun Dock(
     icons: ShieldIcons,
     badges: Map<String, Int>,
     drag: DragState,
+    onPlaced: (androidx.compose.ui.geometry.Rect) -> Unit,
 ) {
     Row(
         Modifier
             .padding(horizontal = 12.dp, vertical = 8.dp)
+            .onGloballyPositioned { onPlaced(it.boundsInRoot()) }
             .fillMaxWidth()
             .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
             .then(
