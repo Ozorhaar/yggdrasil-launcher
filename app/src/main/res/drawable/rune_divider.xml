@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A carved line with a diamond in the middle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="220dp" android:height="10dp" android:viewportWidth="220" android:viewportHeight="10">
+    <path android:pathData="M4,5 L98,5 M122,5 L216,5" android:strokeColor="#99C8A25A" android:strokeWidth="1.2" />
+    <path android:pathData="M110,0.5 L114.5,5 L110,9.5 L105.5,5 Z" android:fillColor="#C8A25A" />
+</vector>

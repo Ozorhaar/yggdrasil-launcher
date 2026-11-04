@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A dark runestone slab: arched top, chipped lower corners, carved gold edge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="400dp" android:height="200dp"
+    android:viewportWidth="400" android:viewportHeight="200">
+    <path android:pathData="M6,196 L6,52 Q8,8 60,5 L340,5 Q392,8 394,52 L394,184 L382,196 L18,196 Z"
+        android:strokeColor="#CCC8A25A" android:strokeWidth="2.5">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="0" android:endY="200"
+                android:startColor="#E6262D36" android:endColor="#E60B1220" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M16,186 L16,56 Q18,17 64,14 L336,14 Q382,17 384,56 L384,180 L377,186 L23,186 Z"
+        android:strokeColor="#55C8A25A" android:strokeWidth="1.2" android:fillColor="#00000000" />
+</vector>

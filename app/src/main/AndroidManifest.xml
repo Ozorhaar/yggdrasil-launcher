@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>
@@ -54,6 +55,21 @@
                 <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
             </intent-filter>
         </activity>
+
+        <!-- The runestone clock widget. -->
+        <receiver
+            android:name=".widgets.RunestoneClock"
+            android:exported="true"
+            android:label="@string/stone_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/runestone_clock_info" />
+        </receiver>
 
         <!-- Unread badges: counts active notifications per app. -->
         <service
