@@ -40,6 +40,14 @@ class HomeLink(context: Context) {
                 "scene" -> "Activate" to "turn_on"
                 else -> null
             }
+
+        /** Why there's no button, for devices search will only ever move one way. */
+        val oneWayHint: String?
+            get() = if (action != null) null else when (domain) {
+                "lock" -> "Can only lock from here"
+                "cover" -> "Can only close from here"
+                else -> null
+            }
     }
 
     val url: String get() = prefs.getString("url", DEFAULT_URL) ?: DEFAULT_URL

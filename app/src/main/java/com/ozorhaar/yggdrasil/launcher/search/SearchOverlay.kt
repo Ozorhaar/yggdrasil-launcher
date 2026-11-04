@@ -235,6 +235,7 @@ fun SearchOverlay(
                                 }
                             }
                         }
+                        ?: d.copy(state = state).oneWayHint?.let { RuneText(it, 12.sp, Ygg.Ash.copy(alpha = 0.6f)) }
                     }
                 }
             }
