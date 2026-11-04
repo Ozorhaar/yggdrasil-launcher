@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        com.ozorhaar.yggdrasil.launcher.security.Guard.relock()
         runCatching { ygg.widgetHost.stopListening() }
     }
 

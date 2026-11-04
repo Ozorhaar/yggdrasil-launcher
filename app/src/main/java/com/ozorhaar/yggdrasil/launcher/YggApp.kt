@@ -32,6 +32,9 @@ class YggApp : Application() {
     /** (resultCode) from a widget's configure screen. */
     val widgetConfigResult = MutableSharedFlow<Int>(extraBufferCapacity = 4)
 
+    /** Home Assistant devices in search (token kept in the hardware keystore). */
+    val homeLink by lazy { com.ozorhaar.yggdrasil.launcher.search.HomeLink(this) }
+
     /** Fires when the Home button is pressed while the launcher is already showing. */
     val homePressed = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 

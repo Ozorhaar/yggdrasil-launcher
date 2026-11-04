@@ -20,8 +20,10 @@ sealed interface Loc {
 }
 
 /** A folder of apps. It sits in a home or dock slot as the reference "folder:<id>". */
-class Folder(val id: String, name: String, apps: List<String>, emblem: Int = -2) {
+class Folder(val id: String, name: String, apps: List<String>, emblem: Int = -2, locked: Boolean = false) {
     var name by mutableStateOf(name)
+    /** Needs your fingerprint (or screen lock) to open. */
+    var locked by mutableStateOf(locked)
     /** Rune index for the folder's emblem; -2 = pick from the name, -1 = none. */
     var emblem by mutableStateOf(emblem)
     val apps: SnapshotStateList<String> = mutableStateListOf<String>().apply { addAll(apps) }
@@ -42,6 +44,7 @@ class WidgetSpot(val id: Int, val provider: String, page: Int, x: Int, y: Int, w
 
 const val FOLDER_PREFIX = "folder:"
 const val DEFAULT_FOLDER_NAME = "Hoard"
+const val BACKUP_FORMAT = "yggdrasil-launcher-layout"
 fun isFolderRef(v: String?): Boolean = v?.startsWith(FOLDER_PREFIX) == true
 
 /**
@@ -73,6 +76,10 @@ class LayoutStore(context: Context) {
     val dock: SnapshotStateList<String?> = mutableStateListOf()
     val folders = mutableStateMapOf<String, Folder>()
     val widgets: SnapshotStateList<WidgetSpot> = mutableStateListOf()
+    /** Apps kept out of the drawer and search. */
+    val hidden: SnapshotStateList<String> = mutableStateListOf()
+    /** Apps that need your fingerprint to open from the launcher. */
+    val locked: SnapshotStateList<String> = mutableStateListOf()
 
     val initialized: Boolean get() = prefs.getBoolean("initialized", false)
 
@@ -87,9 +94,14 @@ class LayoutStore(context: Context) {
             obj.keys().forEach { id ->
                 val f = obj.getJSONObject(id)
                 val list = f.optJSONArray("apps") ?: JSONArray()
-                folders[id] = Folder(id, f.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) }, f.optInt("emblem", -2))
+                folders[id] = Folder(id, f.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) }, f.optInt("emblem", -2), f.optBoolean("locked", false))
             }
         }
+        fun strings(key: String) = prefs.getString(key, null)?.let { raw ->
+            JSONArray(raw).let { a -> (0 until a.length()).map { a.getString(it) } }
+        } ?: emptyList()
+        hidden.clear(); hidden.addAll(strings("hidden"))
+        locked.clear(); locked.addAll(strings("locked"))
         widgets.clear()
         prefs.getString("widgets", null)?.let { raw ->
             val arr = JSONArray(raw)
@@ -130,7 +142,7 @@ class LayoutStore(context: Context) {
         val d = JSONArray().apply { dock.forEach { put(it ?: JSONObject.NULL) } }
         val f = JSONObject()
         folders.values.forEach { folder ->
-            f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList())).put("emblem", folder.emblem))
+            f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList())).put("emblem", folder.emblem).put("locked", folder.locked))
         }
         val wj = JSONArray()
         widgets.forEach { s ->
@@ -144,6 +156,8 @@ class LayoutStore(context: Context) {
             .putString("pages", arr.toString())
             .putString("dock", d.toString())
             .putString("folders", f.toString())
+            .putString("hidden", JSONArray(hidden.toList()).toString())
+            .putString("locked", JSONArray(locked.toList()).toString())
             .putInt("columns", columns)
             .putString("mode", layoutMode.name)
             .putBoolean("runic_labels", runicLabels)
@@ -190,9 +204,114 @@ class LayoutStore(context: Context) {
 
     fun isPlaced(key: String) = isOnHome(key) || dock.any { holds(it, key) }
 
-    /** Every app on the home pages in reading order, folders opened up (used by the Longhall view). */
+    /** Every app on the home pages in reading order, folders opened up (used by the Longhall view). Locked folders stay shut. */
     fun pinnedInOrder(): List<String> = pages.flatMap { p ->
-        p.filterNotNull().flatMap { ref -> folderOf(ref)?.apps?.toList() ?: if (isFolderRef(ref)) emptyList() else listOf(ref) }
+        p.filterNotNull().flatMap { ref ->
+            val f = folderOf(ref)
+            when {
+                f != null -> if (f.locked) emptyList() else f.apps.toList()
+                isFolderRef(ref) -> emptyList()
+                else -> listOf(ref)
+            }
+        }
+    }
+
+    fun isLocked(key: String) = key in locked
+    fun isHidden(key: String) = key in hidden
+
+    fun setLocked(key: String, on: Boolean) {
+        if (on) { if (key !in locked) locked.add(key) } else locked.remove(key)
+        save()
+    }
+
+    fun setHidden(key: String, on: Boolean) {
+        if (on) { if (key !in hidden) hidden.add(key) } else hidden.remove(key)
+        save()
+    }
+
+    fun setFolderLocked(id: String, on: Boolean) {
+        folders[id]?.locked = on
+        save()
+    }
+
+    // ------------------------------------------------------------ backup
+    /** Everything about the layout and launcher look, as a file you can keep. No secrets go in here. */
+    fun exportJson(): JSONObject {
+        val f = JSONObject()
+        folders.values.forEach { folder ->
+            f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList()))
+                .put("emblem", folder.emblem).put("locked", folder.locked))
+        }
+        return JSONObject()
+            .put("format", BACKUP_FORMAT).put("version", 1)
+            .put("columns", columns).put("mode", layoutMode.name)
+            .put("runic_labels", runicLabels).put("dock_runes", dockRunes).put("wall_shade", wallShade)
+            .put("pages", JSONArray().apply { pages.forEach { page -> put(JSONArray().apply { page.forEach { put(it ?: JSONObject.NULL) } }) } })
+            .put("dock", JSONArray().apply { dock.forEach { put(it ?: JSONObject.NULL) } })
+            .put("folders", f)
+            .put("widgets", JSONArray().apply {
+                widgets.forEach { s ->
+                    put(JSONObject().put("provider", s.provider).put("page", s.page).put("x", s.x).put("y", s.y).put("w", s.w).put("h", s.h))
+                }
+            })
+            .put("hidden", JSONArray(hidden.toList()))
+            .put("locked", JSONArray(locked.toList()))
+    }
+
+    /**
+     * Replaces the layout with a backup from [exportJson]. [bindWidget] gets a fresh widget id for a
+     * provider (or null if it can't be restored). Returns the old widget ids to delete and the
+     * providers that couldn't come back.
+     */
+    fun importJson(o: JSONObject, bindWidget: (provider: String) -> Int?): Pair<List<Int>, List<String>> {
+        require(o.optString("format") == BACKUP_FORMAT) { "Not a Yggdrasil layout backup" }
+        val oldWidgets = widgets.map { it.id }
+        columns = o.optInt("columns", columns).coerceIn(4, 5)
+        layoutMode = runCatching { LayoutMode.valueOf(o.optString("mode", layoutMode.name)) }.getOrDefault(layoutMode)
+        runicLabels = o.optBoolean("runic_labels", runicLabels)
+        dockRunes = o.optBoolean("dock_runes", dockRunes)
+        wallShade = o.optInt("wall_shade", wallShade).coerceIn(0, 60)
+
+        folders.clear()
+        o.optJSONObject("folders")?.let { fj ->
+            fj.keys().forEach { id ->
+                val x = fj.getJSONObject(id)
+                val list = x.optJSONArray("apps") ?: JSONArray()
+                folders[id] = Folder(id, x.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) },
+                    x.optInt("emblem", -2), x.optBoolean("locked", false))
+            }
+        }
+        fun ref(a: JSONArray, i: Int): String? =
+            if (i < a.length() && !a.isNull(i)) a.getString(i).takeUnless { isFolderRef(it) && folderOf(it) == null } else null
+        pages.clear()
+        o.optJSONArray("pages")?.let { pa ->
+            for (i in 0 until pa.length()) {
+                val pj = pa.getJSONArray(i)
+                pages.add(mutableStateListOf<String?>().apply { for (j in 0 until slotsPerPage) add(ref(pj, j)) })
+            }
+        }
+        if (pages.isEmpty()) pages.add(emptyPage())
+        val dj = o.optJSONArray("dock") ?: JSONArray()
+        dock.indices.forEach { dock[it] = ref(dj, it) }
+
+        fun strings(key: String) = o.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList()
+        hidden.clear(); hidden.addAll(strings("hidden"))
+        locked.clear(); locked.addAll(strings("locked"))
+
+        widgets.clear()
+        val missing = mutableListOf<String>()
+        o.optJSONArray("widgets")?.let { wa ->
+            for (i in 0 until wa.length()) {
+                val w = wa.getJSONObject(i)
+                val provider = w.optString("provider")
+                val id = bindWidget(provider)
+                if (id == null) { missing += provider; continue }
+                widgets += WidgetSpot(id, provider, w.getInt("page"), w.getInt("x"), w.getInt("y"), w.getInt("w"), w.getInt("h"))
+                while (pages.size <= w.getInt("page")) pages.add(emptyPage())
+            }
+        }
+        save()
+        return oldWidgets to missing
     }
 
     // ------------------------------------------------------------ edits

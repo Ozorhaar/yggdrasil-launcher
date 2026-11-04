@@ -120,6 +120,13 @@ fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons,
             .padding(size * 0.08f),
         contentAlignment = Alignment.Center,
     ) {
+        if (folder.locked) {
+            // locked: show nothing of what's inside, just its rune and a padlock
+            val rune = emblemFor(folder.emblem, folder.name, folder.id)
+            if (rune >= 0) RuneGlyph(rune, size * 0.5f, Ygg.GoldHi)
+            Padlock(Modifier.align(Alignment.BottomEnd).offset(x = size * 0.1f, y = size * 0.1f), size * 0.3f)
+            return@Box
+        }
         Column(verticalArrangement = Arrangement.spacedBy(size * 0.04f)) {
             for (r in 0 until 2) {
                 Row(horizontalArrangement = Arrangement.spacedBy(size * 0.04f)) {
@@ -141,6 +148,30 @@ fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons,
                 contentAlignment = Alignment.Center,
             ) { RuneGlyph(rune, m * 0.62f, Ygg.GoldHi) }
         }
+    }
+}
+
+/** A small iron padlock badge. */
+@Composable
+fun Padlock(modifier: Modifier, size: Dp) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        val stroke = w * 0.09f
+        drawCircle(Ygg.Night, radius = w / 2f)
+        drawCircle(Ygg.Gold, radius = w / 2f - stroke / 2f, style = Stroke(width = stroke * 0.7f))
+        // shackle
+        drawArc(
+            Ygg.GoldHi, startAngle = 180f, sweepAngle = 180f, useCenter = false,
+            topLeft = androidx.compose.ui.geometry.Offset(w * 0.33f, w * 0.2f),
+            size = androidx.compose.ui.geometry.Size(w * 0.34f, w * 0.34f),
+            style = Stroke(width = stroke, cap = StrokeCap.Round),
+        )
+        // body
+        drawRect(
+            Ygg.GoldHi,
+            topLeft = androidx.compose.ui.geometry.Offset(w * 0.27f, w * 0.42f),
+            size = androidx.compose.ui.geometry.Size(w * 0.46f, w * 0.34f),
+        )
     }
 }
 

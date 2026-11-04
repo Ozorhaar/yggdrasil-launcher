@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import com.ozorhaar.yggdrasil.launcher.data.FOLDER_PREFIX
 import com.ozorhaar.yggdrasil.launcher.data.Folder
+import com.ozorhaar.yggdrasil.launcher.search.SearchOverlay
+import com.ozorhaar.yggdrasil.launcher.security.Guard
 import com.ozorhaar.yggdrasil.launcher.data.Loc
 import com.ozorhaar.yggdrasil.launcher.data.isFolderRef
 import kotlin.math.roundToInt
@@ -38,6 +40,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -153,9 +157,11 @@ fun LauncherRoot() {
         ShieldIcons(with(density) { 64.dp.roundToPx() }) { ygg.repo.iconFor(it, dpi) }
     }
     val haptic = LocalHapticFeedback.current
+    val topZonePx = WindowInsets.statusBars.getTop(density) + with(density) { 56.dp.toPx() }
 
     var drawerOpen by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf<MenuTarget?>(null) }
     var openFolder by remember { mutableStateOf<String?>(null) }
     var homeMenu by remember { mutableStateOf(false) }
@@ -205,7 +211,7 @@ fun LauncherRoot() {
     }
     LaunchedEffect(Unit) {
         ygg.homePressed.collect {
-            drawerOpen = false; settingsOpen = false; menu = null; openFolder = null; drag.reset()
+            drawerOpen = false; settingsOpen = false; searchOpen = false; menu = null; openFolder = null; drag.reset()
             homeMenu = false; widgetPicker = false; widgetMenu = null
             scope.launch { pager.animateScrollToPage(0) }
         }
@@ -219,12 +225,21 @@ fun LauncherRoot() {
             widgetPicker -> widgetPicker = false
             openFolder != null -> openFolder = null
             settingsOpen -> settingsOpen = false
+            searchOpen -> searchOpen = false
             drawerOpen -> drawerOpen = false
         }
     }
 
+    /** Opens an app, asking for your fingerprint first if you've locked it. */
     fun launch(app: AppEntry) {
-        ygg.repo.launch(app)
+        if (layout.isLocked(app.key) || (app.isShortcut && layout.isLocked(app.packageName)))
+            Guard.check(ctx, "Open ${app.label}") { ygg.repo.launch(app) }
+        else ygg.repo.launch(app)
+    }
+
+    /** Opens a folder, asking for your fingerprint first if it's locked. */
+    fun showFolder(f: Folder) {
+        if (f.locked) Guard.check(ctx, "Open ${f.name}") { openFolder = f.id } else openFolder = f.id
     }
 
     // ---------------------------------------------------------- widgets
@@ -334,7 +349,7 @@ fun LauncherRoot() {
     fun tapItem(loc: Loc, item: String) {
         val folder = layout.folderOf(item)
         when {
-            folder != null -> openFolder = folder.id
+            folder != null -> showFolder(folder)
             else -> byKeyNow[item]?.let { app ->
                 if (loc is Loc.InFolder) openFolder = null
                 launch(app)
@@ -362,7 +377,7 @@ fun LauncherRoot() {
         if (!moved) {
             // a long-press that stayed put: options for that icon
             val folder = layout.folderOf(item)
-            if (folder != null) openFolder = folder.id
+            if (folder != null) showFolder(folder)
             else byKeyNow[item]?.let { menu = MenuTarget(it, if (src is Loc.Dock) From.DOCK else From.HOME) }
         } else {
             updateHover()
@@ -403,7 +418,7 @@ fun LauncherRoot() {
         }
     }
 
-    val overlayOpen = drawerOpen || settingsOpen || menu != null || openFolder != null ||
+    val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null ||
         homeMenu || widgetPicker || widgetMenu != null
 
     Box(
@@ -416,7 +431,7 @@ fun LauncherRoot() {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     drag.ownedGesture = false
-                    if (drawerOpen || settingsOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null)
+                    if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null)
                         return@awaitEachGesture
                     val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
                     val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)
@@ -489,12 +504,15 @@ fun LauncherRoot() {
             .pointerInput(overlayOpen) {
                 if (overlayOpen) return@pointerInput
                 var total = 0f
+                var fromTop = false
+                // the top strip (status bar and just below it) pulls notifications; anywhere else opens search
+                val topZone = topZonePx
                 detectVerticalDragGestures(
-                    onDragStart = { total = 0f },
+                    onDragStart = { start -> total = 0f; fromTop = start.y < topZone },
                     onDragEnd = {
                         if (drag.ownedGesture) return@detectVerticalDragGestures
                         if (total < -140f) drawerOpen = true
-                        else if (total > 140f) ctx.expandNotifications()
+                        else if (total > 140f) { if (fromTop) ctx.expandNotifications() else searchOpen = true }
                     },
                 ) { _, dy -> total += dy }
             }
@@ -555,12 +573,26 @@ fun LauncherRoot() {
             exit = slideOutVertically { it } + fadeOut(),
         ) {
             AppDrawer(
-                apps = apps, icons = icons, badges = badges, runic = layout.runicLabels,
+                apps = apps.filter { !layout.isHidden(it.key) }, icons = icons, badges = badges, runic = layout.runicLabels,
                 onLaunch = { drawerOpen = false; launch(it) },
                 onLong = { menu = MenuTarget(it, From.DRAWER) },
                 onClose = { drawerOpen = false },
                 onWidgets = { drawerOpen = false; widgetPicker = true },
                 onSettings = { drawerOpen = false; settingsOpen = true },
+            )
+        }
+
+        AnimatedVisibility(
+            searchOpen,
+            enter = slideInVertically { -it / 3 } + fadeIn(),
+            exit = slideOutVertically { -it / 3 } + fadeOut(),
+        ) {
+            SearchOverlay(
+                apps = apps.filter { !layout.isHidden(it.key) },
+                icons = icons,
+                home = ygg.homeLink,
+                onLaunch = { launch(it) },
+                onClose = { searchOpen = false },
             )
         }
 
@@ -776,6 +808,7 @@ private fun FolderPopup(
     var editing by remember(folder.id) { mutableStateOf(false) }
     var name by remember(folder.id) { mutableStateOf(folder.name) }
     var picking by remember(folder.id) { mutableStateOf(false) }
+    val ctx = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun commit() {
         layout.renameFolder(folder.id, name); name = folder.name; editing = false; keyboard?.hide()
@@ -885,7 +918,17 @@ private fun FolderPopup(
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { RuneText("Hold and drag an app out to take it out", 13.sp, Ygg.Ash) }
-                RuneButton("Ungroup") { layout.ungroup(folder.id); onClose() }
+                if (folder.locked) RuneButton("Unlock") {
+                    Guard.check(ctx, "Unlock ${folder.name}", fresh = true) { layout.setFolderLocked(folder.id, false) }
+                } else RuneButton("Lock") {
+                    if (Guard.available(ctx)) layout.setFolderLocked(folder.id, true)
+                    else Toast.makeText(ctx, "Set up a fingerprint or screen lock first", Toast.LENGTH_LONG).show()
+                }
+                Spacer(Modifier.width(8.dp))
+                RuneButton("Ungroup") {
+                    if (folder.locked) Guard.check(ctx, "Ungroup ${folder.name}", fresh = true) { layout.ungroup(folder.id); onClose() }
+                    else { layout.ungroup(folder.id); onClose() }
+                }
             }
         }
     }
@@ -1125,7 +1168,11 @@ private fun ActionSheet(
                 Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                     shortcuts.forEach { sc ->
                         Row(
-                            Modifier.fillMaxWidth().clickable { repo.launchShortcut(sc); onDismiss() }.padding(vertical = 6.dp),
+                            Modifier.fillMaxWidth().clickable {
+                                if (layout.isLocked(app.key)) Guard.check(ctx, "Open ${app.label}") { repo.launchShortcut(sc) }
+                                else repo.launchShortcut(sc)
+                                onDismiss()
+                            }.padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Box(Modifier.size(8.dp).rotate(45f).background(Ygg.Frost))
@@ -1150,6 +1197,20 @@ private fun ActionSheet(
             else if (!app.isShortcut) SheetItem("Add to home") { layout.addToHome(app.key); onDismiss() }
             if (inDock) SheetItem("Unpin from dock") { layout.unpinFromDock(app.key); dropIfUnused(); onDismiss() }
             else if (layout.dock.any { it == null }) SheetItem("Pin to dock") { layout.pinToDock(app.key); onDismiss() }
+            if (!app.isShortcut) {
+                if (layout.isLocked(app.key)) SheetItem("Unlock (no fingerprint to open)") {
+                    Guard.check(ctx, "Unlock ${app.label}", fresh = true) { layout.setLocked(app.key, false) }; onDismiss()
+                } else SheetItem("Lock with fingerprint") {
+                    if (Guard.available(ctx)) layout.setLocked(app.key, true)
+                    else Toast.makeText(ctx, "Set up a fingerprint or screen lock first", Toast.LENGTH_LONG).show()
+                    onDismiss()
+                }
+                if (!layout.isHidden(app.key)) SheetItem("Hide from apps and search") {
+                    layout.setHidden(app.key, true)
+                    Toast.makeText(ctx, "${app.label} hidden. Settings → Privacy shows hidden apps.", Toast.LENGTH_LONG).show()
+                    onDismiss()
+                }
+            }
             SheetItem("App info") { repo.openAppInfo(app); onDismiss() }
             if (!app.isShortcut) SheetItem("Uninstall", Ygg.Ember) { ctx.uninstall(app.packageName); onDismiss() }
         }
@@ -1288,6 +1349,10 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         StatusLine(if (ctx.badgeAccessGranted()) "On" else "Needs notification access")
         RuneButton("Open notification access") { ctx.openSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }
 
+        PrivacySection(layout)
+        SearchSection()
+        BackupSection(layout, onDone = onClose)
+
         Section("Double-tap to lock")
         StatusLine(
             when {
@@ -1306,7 +1371,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down: notifications\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
@@ -1382,7 +1447,7 @@ private fun WallThumb(w: com.ozorhaar.yggdrasil.launcher.YggWallpaper, onClick: 
 }
 
 @Composable
-private fun Section(title: String) {
+internal fun Section(title: String) {
     Spacer(Modifier.height(22.dp))
     RuneText(title, 20.sp, Ygg.Frost)
     Canvas(Modifier.fillMaxWidth().height(8.dp)) {
@@ -1391,10 +1456,10 @@ private fun Section(title: String) {
 }
 
 @Composable
-private fun StatusLine(text: String) = RuneText(text, 15.sp, Ygg.Ash)
+internal fun StatusLine(text: String) = RuneText(text, 15.sp, Ygg.Ash)
 
 @Composable
-private fun Choice(text: String, selected: Boolean, onClick: () -> Unit) {
+internal fun Choice(text: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .clickable(onClick = onClick)
