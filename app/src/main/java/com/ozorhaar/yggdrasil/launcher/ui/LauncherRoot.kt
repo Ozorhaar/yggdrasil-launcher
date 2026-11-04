@@ -240,9 +240,14 @@ fun LauncherRoot() {
         }
     }
 
-    /** Opens an app, asking for your fingerprint first if you've locked it. */
-    fun launch(app: AppEntry) {
-        if (layout.isLocked(app.key) || (app.isShortcut && layout.isLocked(app.packageName)))
+    /**
+     * Opens an app, asking for your fingerprint first if it's locked, or if it lives in a locked
+     * folder (from the drawer, search or anywhere else). Opening it from inside a folder you just
+     * unlocked doesn't ask twice.
+     */
+    fun launch(app: AppEntry, insideUnlockedFolder: Boolean = false) {
+        val inFolderLock = !insideUnlockedFolder && (layout.inLockedFolder(app.key) || (app.isShortcut && layout.inLockedFolder(app.packageName)))
+        if (layout.isLocked(app.key) || (app.isShortcut && layout.isLocked(app.packageName)) || inFolderLock)
             Guard.check(ctx, "Open ${app.label}") { ygg.repo.launch(app) }
         else ygg.repo.launch(app)
     }
@@ -362,7 +367,7 @@ fun LauncherRoot() {
             folder != null -> showFolder(folder)
             else -> byKeyNow[item]?.let { app ->
                 if (loc is Loc.InFolder) openFolder = null
-                launch(app)
+                launch(app, insideUnlockedFolder = loc is Loc.InFolder)
             }
         }
     }
@@ -1270,7 +1275,7 @@ private fun ActionSheet(
                     shortcuts.forEach { sc ->
                         Row(
                             Modifier.fillMaxWidth().clickable {
-                                if (layout.isLocked(app.key)) Guard.check(ctx, "Open ${app.label}") { repo.launchShortcut(sc) }
+                                if (layout.isLocked(app.key) || layout.inLockedFolder(app.key)) Guard.check(ctx, "Open ${app.label}") { repo.launchShortcut(sc) }
                                 else repo.launchShortcut(sc)
                                 onDismiss()
                             }.padding(vertical = 6.dp),

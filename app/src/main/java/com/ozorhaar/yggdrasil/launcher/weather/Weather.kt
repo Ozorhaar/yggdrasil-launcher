@@ -10,9 +10,11 @@ import java.net.URL
  * shared by the runestone clock and the living wallpaper.
  */
 object Weather {
-    // Cuyahoga Falls, Ohio
-    const val LAT = 41.13
-    const val LON = -81.48
+    // Where to ask about: the house location from Home Assistant (cached on the phone only),
+    // else the middle of town. Sent to Open-Meteo rounded to ~1 km.
+    private const val TOWN_LAT = 41.13   // Cuyahoga Falls, Ohio
+    private const val TOWN_LON = -81.48
+    private const val LOC_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000L
     private const val MAX_AGE_MS = 30 * 60 * 1000L
 
     enum class Sky { CLEAR, PARTLY, CLOUDY, FOG, DRIZZLE, RAIN, SNOW, THUNDER }
@@ -65,9 +67,25 @@ object Weather {
         return runCatching { fetch(ctx) }.getOrNull() ?: c
     }
 
+    /** House location from Home Assistant, refreshed weekly; falls back to the town. Off the main thread. */
+    private fun place(ctx: Context): Pair<Double, Double> {
+        val p = ctx.getSharedPreferences("ygg_weather_place", Context.MODE_PRIVATE)
+        val at = p.getLong("at", 0L)
+        if (System.currentTimeMillis() - at > LOC_MAX_AGE_MS) {
+            com.ozorhaar.yggdrasil.launcher.search.HomeLink(ctx).homeLocation()?.let { (la, lo) ->
+                p.edit().putFloat("lat", la.toFloat()).putFloat("lon", lo.toFloat()).putLong("at", System.currentTimeMillis()).apply()
+            }
+        }
+        val lat = if (p.contains("lat")) p.getFloat("lat", 0f).toDouble() else TOWN_LAT
+        val lon = if (p.contains("lon")) p.getFloat("lon", 0f).toDouble() else TOWN_LON
+        fun r2(v: Double) = Math.round(v * 100) / 100.0
+        return r2(lat) to r2(lon)
+    }
+
     private fun fetch(ctx: Context): Now {
+        val (lat, lon) = place(ctx)
         val url = URL(
-            "https://api.open-meteo.com/v1/forecast?latitude=$LAT&longitude=$LON" +
+            "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
                 "&current=temperature_2m,weather_code,is_day" +
                 "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset" +
                 "&temperature_unit=fahrenheit&timezone=auto&forecast_days=1&timeformat=unixtime"

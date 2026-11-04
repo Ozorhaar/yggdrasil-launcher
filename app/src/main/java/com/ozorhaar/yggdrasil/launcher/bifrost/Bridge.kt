@@ -38,8 +38,18 @@ object Bridge {
 
     data class Info(val mode: String, val full: Boolean, val wanted: Boolean, val detail: String)
 
+    private const val AUTHORITY = "com.ozorhaar.bifrost.bridge"
+
+    /** True only if the provider really belongs to Bifrost and Bifrost carries our own signature. */
+    private fun genuine(ctx: Context): Boolean = runCatching {
+        val pm = ctx.packageManager
+        pm.resolveContentProvider(AUTHORITY, 0)?.packageName == PACKAGE &&
+            pm.checkSignatures(ctx.packageName, PACKAGE) == android.content.pm.PackageManager.SIGNATURE_MATCH
+    }.getOrDefault(false)
+
     /** Blocking. */
     fun read(ctx: Context): Info? = runCatching {
+        if (!genuine(ctx)) return null
         ctx.contentResolver.query(URI, null, null, null, null)?.use { c ->
             if (!c.moveToFirst()) null
             else Info(c.getString(0), c.getInt(1) == 1, c.getInt(2) == 1, c.getString(3) ?: "")
@@ -48,7 +58,7 @@ object Bridge {
 
     /** Blocking. "lower" or "raise"; false means Bifrost needs to be opened. */
     fun call(ctx: Context, method: String): Boolean =
-        runCatching { ctx.contentResolver.call(URI, method, null, null)?.getBoolean("ok") == true }.getOrDefault(false)
+        genuine(ctx) && runCatching { ctx.contentResolver.call(URI, method, null, null)?.getBoolean("ok") == true }.getOrDefault(false)
 
     fun open(ctx: Context) {
         ctx.packageManager.getLaunchIntentForPackage(PACKAGE)?.let {

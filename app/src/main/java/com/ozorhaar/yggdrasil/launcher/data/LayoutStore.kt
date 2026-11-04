@@ -217,6 +217,9 @@ class LayoutStore(context: Context) {
     }
 
     fun isLocked(key: String) = key in locked
+
+    /** True if [key] sits in a locked folder: such apps ask for a fingerprint wherever they're opened. */
+    fun inLockedFolder(key: String) = folders.values.any { it.locked && key in it.apps }
     fun isHidden(key: String) = key in hidden
 
     fun setLocked(key: String, on: Boolean) {

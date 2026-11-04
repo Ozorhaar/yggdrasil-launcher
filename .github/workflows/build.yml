@@ -30,12 +30,10 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.YGG_KEYSTORE_B64 }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ygg.p12"
-            echo "YGG_KEYSTORE=$RUNNER_TEMP/ygg.p12" >> "$GITHUB_ENV"
-          else
-            echo "::warning::No signing key secret; building with the debug key"
-          fi
+          # never publish a debug-signed release
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::No signing key secret"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ygg.p12"
+          echo "YGG_KEYSTORE=$RUNNER_TEMP/ygg.p12" >> "$GITHUB_ENV"
       - name: Build
         env:
           YGG_KEYSTORE_PASSWORD: ${{ secrets.YGG_KEYSTORE_PASSWORD }}
@@ -45,6 +43,7 @@ jobs:
           A="YggdrasilLauncher-1.0.${{ github.run_number }}.apk"
           cp app/build/outputs/apk/release/app-release.apk "$A"
           sha256sum "$A" | tee "$A.sha256"
+          rm -f "$RUNNER_TEMP/ygg.p12"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: YggdrasilLauncher

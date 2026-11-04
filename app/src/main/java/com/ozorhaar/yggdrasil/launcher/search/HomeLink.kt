@@ -117,6 +117,8 @@ class HomeLink(context: Context) {
      * Follow-ups within two minutes stay in the same conversation. Blocking.
      */
     fun ask(text: String): String {
+        // Same guard rail as Hafnir's own: voice/typing never unlocks, opens a door/garage/gate or disarms.
+        if (Backstop.isForbidden(text)) return Backstop.REPLY
         val body = JSONObject().put("text", text).put("language", "en").put("agent_id", AGENT)
         chatId?.takeIf { System.currentTimeMillis() - chatAt < 120_000 }?.let { body.put("conversation_id", it) }
         val r = JSONObject(request(url, token(), "POST", "/api/conversation/process", body.toString()))
@@ -136,6 +138,13 @@ class HomeLink(context: Context) {
             JSONObject(request(url, token(), "GET", "/api/states/${d.entityId}", null)).optString("state")
         }.getOrDefault("?")
     }
+
+    /** The house's latitude/longitude from Home Assistant's config, or null if not connected. Blocking. */
+    fun homeLocation(): Pair<Double, Double>? = runCatching {
+        if (!configured) return null
+        val j = org.json.JSONObject(request(url, token(), "GET", "/api/config", null))
+        j.getDouble("latitude") to j.getDouble("longitude")
+    }.getOrNull()
 
     private fun request(base: String, token: String, method: String, path: String, body: String?): String {
         val c = URL(base + path).openConnection() as HttpURLConnection
@@ -189,7 +198,7 @@ class HomeLink(context: Context) {
     }
 
     companion object {
-        const val DEFAULT_URL = "https://homeassistant.example"
+        const val DEFAULT_URL = ""
         const val AGENT = "conversation.hafnir_mac"
         private const val KEY_ALIAS = "ygg_home_link"
         private val DOMAINS = setOf("light", "switch", "fan", "input_boolean", "lock", "cover", "scene")

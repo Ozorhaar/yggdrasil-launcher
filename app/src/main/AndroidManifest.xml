@@ -14,6 +14,8 @@
 
     <!-- Bifrost's bridge state and lower/raise; only granted because both apps carry the Yggdrasil key -->
     <uses-permission android:name="com.ozorhaar.bifrost.permission.BRIDGE" />
+    <!-- Waking Hafnir from the dock; Hafnir only grants it to Yggdrasil-signed apps -->
+    <uses-permission android:name="com.ozorhaar.hafnir.permission.LISTEN" />
 
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>
