@@ -74,6 +74,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -1189,7 +1190,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             }
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.forEach { w ->
                 WallThumb(w) {
                     scope.launch {
@@ -1223,7 +1224,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         Section("Backdrop")
         StatusLine("Paint the art inside the launcher instead of using the system wallpaper")
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Choice("System", layout.backdrop == "") { layout.updateBackdrop("") }
             com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.forEach { w ->
                 Choice(w.label, layout.backdrop == w.name) { layout.updateBackdrop(w.name) }

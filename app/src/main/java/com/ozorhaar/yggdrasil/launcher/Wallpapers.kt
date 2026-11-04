@@ -10,6 +10,7 @@ enum class YggWallpaper(val label: String, val res: Int) {
     FJORD("Fjord", R.drawable.ygg_wall_fjord),
     WORLD_TREE("World Tree", R.drawable.ygg_wall_worldtree),
     IRON("Iron", R.drawable.ygg_wall_iron),
+    GOLD_TREE("Gold tree", R.drawable.ygg_wall_goldtree),   // black + thin gold: made for the lock screen / AOD
 }
 
 enum class WallTarget(val label: String, val flags: Int) {
