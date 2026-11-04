@@ -30,9 +30,15 @@ import kotlin.random.Random
  * rain, snow, lightning) is painted live; the mountains and the longship are
  * fixed layers cut from the static fjord wallpaper.
  */
+const val DEMO_SECONDS = 80f
+const val DEMO_PREF = "fjord_demo_start"
+
 class FjordScene(ctx: Context) {
 
     var weather: Weather.Now? = Weather.cached(ctx)
+
+    /** Set to start the ~80 s demo that runs through a day and every kind of weather. 0 = off. */
+    var demoStart = 0L
 
     /** True while something moves (northern lights, rain, snow, storm): the engine then draws ~15 fps. */
     var animating = false
@@ -101,13 +107,36 @@ class FjordScene(ctx: Context) {
     }
 
     // ------------------------------------------------------------------ drawing
+    /** Demo script: (seconds from start, what to show). Returns fake clock time, weather code, aurora strength. */
+    private fun demoState(realNow: Long): Triple<Long, Int, Float>? {
+        if (demoStart == 0L) return null
+        val sec = (realNow - demoStart) / 1000f
+        if (sec < 0 || sec > DEMO_SECONDS) { demoStart = 0L; return null }
+        val saved = weather
+        weather = null                                   // use the fixed 7:15 / 17:45 day for the demo
+        val (rise, set) = sunTimes(realNow)
+        weather = saved
+        val m = 60_000L
+        fun at(t: Long, code: Int, aurora: Float = 0f) = Triple(t, code, aurora)
+        return when {
+            sec < 30 -> at(rise - 80 * m + ((set + 70 * m - (rise - 80 * m)) * (sec / 30f)).toLong(), 0)   // a whole clear day
+            sec < 44 -> at(set + 180 * m, 0, 1f)          // a clear night: full northern lights
+            sec < 54 -> at(rise + 240 * m, 63)            // rain
+            sec < 64 -> at(set + 20 * m, 95)              // storm at dusk
+            sec < 74 -> at(rise + 200 * m, 73)            // snow
+            else -> at(rise + 10 * m, 45)                 // foggy dawn
+        }
+    }
+
     fun draw(c: Canvas, w: Int, h: Int, xOffset: Float, uptime: Long) {
-        val now = System.currentTimeMillis()
+        val realNow = System.currentTimeMillis()
+        val demo = demoState(realNow)
+        val now = demo?.first ?: realNow
         val dt = if (lastT == 0L) 0f else ((uptime - lastT).coerceIn(0, 100)) / 1000f
         lastT = uptime
         val t = uptime.toFloat()
 
-        val wx = weather
+        val wx = if (demo != null) Weather.Now(40, 45, 35, demo.second, true, 0, 0, 0) else weather
         val skyKind = wx?.sky ?: Weather.Sky.CLEAR
         val cloud = when (skyKind) {
             Weather.Sky.CLEAR -> 0f; Weather.Sky.PARTLY -> 0.3f; Weather.Sky.CLOUDY -> 0.75f
@@ -164,7 +193,7 @@ class FjordScene(ctx: Context) {
 
         // northern lights
         val night = floor((now - 12 * 3600_000L) / 86_400_000.0)
-        val auroraNight = 0.35f + 0.65f * frac(sin(night * 12.9898) * 43758.5453).toFloat()
+        val auroraNight = if (demo != null) demo.third else 0.35f + 0.65f * frac(sin(night * 12.9898) * 43758.5453).toFloat()
         val auroraA = auroraNight * ((p.dark - 0.65f) / 0.35f).coerceIn(0f, 1f) * (1 - cloud * 2.2f).coerceIn(0f, 1f)
         if (auroraA > 0.03f) drawAurora(c, w, h, t, auroraA, skyPar)
 
@@ -268,7 +297,7 @@ class FjordScene(ctx: Context) {
         }
         if (precip > 0) drawPrecip(c, w, h, dt, t, precip, skyKind == Weather.Sky.SNOW, light)
 
-        animating = auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
+        animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
     }
 
     private fun drawAurora(c: Canvas, w: Int, h: Int, t: Float, a: Float, par: Float) {

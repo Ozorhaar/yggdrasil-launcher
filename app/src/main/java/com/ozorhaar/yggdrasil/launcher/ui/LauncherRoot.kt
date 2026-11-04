@@ -1204,6 +1204,13 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             }.onFailure { Toast.makeText(ctx, "Couldn't open the wallpaper preview", Toast.LENGTH_SHORT).show() }
         }
 
+        RuneButton("Show me the sky (80-second demo)") {
+            ctx.getSharedPreferences("weather", android.content.Context.MODE_PRIVATE).edit()
+                .putLong(com.ozorhaar.yggdrasil.launcher.wallpaper.DEMO_PREF, System.currentTimeMillis()).apply()
+            onClose()
+        }
+        StatusLine("A whole day, a night of northern lights, rain, a storm, snow and fog. Needs the living fjord as your wallpaper.")
+
         Section("Backdrop")
         StatusLine("Paint the art inside the launcher instead of using the system wallpaper")
         Spacer(Modifier.height(6.dp))

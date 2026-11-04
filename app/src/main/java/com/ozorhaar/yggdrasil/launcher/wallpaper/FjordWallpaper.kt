@@ -27,11 +27,23 @@ class FjordWallpaper : WallpaperService() {
         private var xOffset = 0.5f
         private var lastWeather = 0L
         private val tick = Runnable { drawFrame() }
+        private val prefs by lazy { applicationContext.getSharedPreferences("weather", MODE_PRIVATE) }
+        /** The launcher's "Show me the sky" button writes a start time here. */
+        private val demoListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+            if (key == DEMO_PREF) {
+                scene?.demoStart = p.getLong(DEMO_PREF, 0L)
+                if (visible) drawFrame()
+            }
+        }
 
         override fun onCreate(holder: SurfaceHolder) {
             super.onCreate(holder)
             setOffsetNotificationsEnabled(true)
-            scene = FjordScene(applicationContext)
+            scene = FjordScene(applicationContext).also { sc ->
+                val start = prefs.getLong(DEMO_PREF, 0L)
+                if (System.currentTimeMillis() - start < DEMO_SECONDS * 1000) sc.demoStart = start
+            }
+            prefs.registerOnSharedPreferenceChangeListener(demoListener)
         }
 
         override fun onVisibilityChanged(v: Boolean) {
@@ -59,6 +71,7 @@ class FjordWallpaper : WallpaperService() {
 
         override fun onDestroy() {
             handler.removeCallbacks(tick)
+            prefs.unregisterOnSharedPreferenceChangeListener(demoListener)
             scene?.release()
             scene = null
             super.onDestroy()
