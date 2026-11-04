@@ -94,17 +94,26 @@ fun AppTile(
 
 @Composable
 fun TileLabel(text: String, runic: Boolean) {
-    Text(
-        text = text,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        textAlign = TextAlign.Center,
-        style = TextStyle(
-            color = Ygg.Bone,
-            fontSize = if (runic) 12.sp else 11.sp,
-            fontFamily = if (runic) Ygg.Runic else null,
-            shadow = labelShadow,
-        ),
-        modifier = Modifier.padding(top = 4.dp),
+    // Drawn twice so names stay readable on any wallpaper: a dark carved outline with a soft
+    // dark glow underneath, then the bone-coloured letters on top.
+    val base = TextStyle(
+        fontSize = if (runic) 12.sp else 11.sp,
+        fontFamily = if (runic) Ygg.Runic else null,
     )
+    Box(Modifier.padding(top = 4.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text = text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+            style = base.copy(
+                color = Color(0xF20B1220),
+                drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 5f, join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                ),
+                shadow = Shadow(color = Color(0xE6000000), blurRadius = 10f),
+            ),
+        )
+        Text(
+            text = text, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+            style = base.copy(color = Ygg.Bone),
+        )
+    }
 }
