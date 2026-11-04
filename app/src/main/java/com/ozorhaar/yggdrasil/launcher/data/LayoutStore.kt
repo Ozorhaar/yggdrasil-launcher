@@ -66,9 +66,6 @@ class LayoutStore(context: Context) {
     /** How much to darken the wallpaper, 0-60 (percent). */
     var wallShade by mutableStateOf(prefs.getInt("wall_shade", 0))
         private set
-    /** Name of a bundled YggWallpaper the launcher paints itself, or "" for the system wallpaper. */
-    var backdrop by mutableStateOf(prefs.getString("backdrop", "") ?: "")
-        private set
 
     val pages: SnapshotStateList<SnapshotStateList<String?>> = mutableStateListOf()
     val dock: SnapshotStateList<String?> = mutableStateListOf()
@@ -150,7 +147,7 @@ class LayoutStore(context: Context) {
             .putBoolean("runic_labels", runicLabels)
             .putBoolean("dock_runes", dockRunes)
             .putInt("wall_shade", wallShade)
-            .putString("backdrop", backdrop)
+            .remove("backdrop")   // the old in-launcher backdrop (fog testing) is gone
             .putBoolean("initialized", true)
             .apply()
     }
@@ -380,7 +377,6 @@ class LayoutStore(context: Context) {
     fun updateRunicLabels(on: Boolean) { runicLabels = on; save() }
     fun updateDockRunes(on: Boolean) { dockRunes = on; save() }
     fun updateWallShade(pct: Int) { wallShade = pct.coerceIn(0, 60); save() }
-    fun updateBackdrop(name: String) { backdrop = name; save() }
 
     fun updateColumns(c: Int) {
         if (c == columns) return

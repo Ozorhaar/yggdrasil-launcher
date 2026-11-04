@@ -491,15 +491,6 @@ fun LauncherRoot() {
                 ) { _, dy -> total += dy }
             }
     ) {
-        // backdrop painted by the launcher itself (instead of the system wallpaper layer)
-        com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.firstOrNull { it.name == layout.backdrop }?.let { w ->
-            androidx.compose.foundation.Image(
-                painter = androidx.compose.ui.res.painterResource(w.res),
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
         // wallpaper shade: a little darker at the top (clock/status bar) and bottom (dock)
         if (layout.wallShade > 0) {
             val a = layout.wallShade / 100f
@@ -1221,16 +1212,6 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         }
         StatusLine("A whole day, a night of northern lights, rain, a storm, snow and fog. Needs the living fjord as your wallpaper.")
 
-        Section("Backdrop")
-        StatusLine("Paint the art inside the launcher instead of using the system wallpaper")
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice("System", layout.backdrop == "") { layout.updateBackdrop("") }
-            com.ozorhaar.yggdrasil.launcher.YggWallpaper.entries.forEach { w ->
-                Choice(w.label, layout.backdrop == w.name) { layout.updateBackdrop(w.name) }
-            }
-        }
-
         Section("Wallpaper shade")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf(0, 15, 30, 45, 60).forEach { pct ->
@@ -1270,7 +1251,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         RuneButton("Choose home app") { ctx.openSettings(Settings.ACTION_HOME_SETTINGS) }
 
         Section("Updates")
-        RuneButton("Get the latest release") { ctx.openUrl("https://github.com/Ozorhaar/yggdrasil-launcher/releases/latest") }
+        UpdatesSection()
 
         Section("Gestures")
         RuneText(
@@ -1278,6 +1259,60 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** Check GitHub for a newer launcher, verify it, and hand it to Android's installer. */
+@Composable
+private fun UpdatesSection() {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf("Installed: " + com.ozorhaar.yggdrasil.launcher.update.Updater.installedName(ctx)) }
+    var release by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.update.Updater.Release?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val U = com.ozorhaar.yggdrasil.launcher.update.Updater
+    StatusLine(status)
+    val r = release
+    if (r == null) {
+        RuneButton(if (busy) "Checking…" else "Check for updates") {
+            if (busy) return@RuneButton
+            busy = true
+            scope.launch {
+                runCatching { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { U.latest() } }
+                    .onSuccess {
+                        if (it.versionCode > U.installedCode(ctx)) { release = it; status = "Version ${it.versionName} is ready" }
+                        else status = "Up to date (${U.installedName(ctx)})"
+                    }
+                    .onFailure { status = "Couldn't check: ${it.message}" }
+                busy = false
+            }
+        }
+    } else {
+        RuneButton(if (busy) "Working…" else "Install ${r.versionName}") {
+            if (busy) return@RuneButton
+            if (!U.canInstall(ctx)) {
+                status = "Allow Yggdrasil to install updates, then tap Install again"
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, android.net.Uri.parse("package:${ctx.packageName}"))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                return@RuneButton
+            }
+            busy = true
+            scope.launch {
+                runCatching {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        U.downloadAndVerify(ctx, r) { msg -> scope.launch { status = msg } }
+                    }
+                }.onSuccess { apk ->
+                    status = "Verified: checksum and signature match. Confirm on the next screen."
+                    runCatching { U.install(ctx, apk) }.onFailure { status = "Couldn't start the install: ${it.message}" }
+                }.onFailure { status = it.message ?: "Update failed" }
+                busy = false
+            }
+        }
     }
 }
 

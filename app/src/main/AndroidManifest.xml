@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- in-app updates: Android still asks you to confirm every install -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>
@@ -84,6 +86,11 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/fjord_wallpaper" />
         </service>
+
+        <!-- The installer's answer to an in-app update. -->
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false" />
 
         <!-- Unread badges: counts active notifications per app. -->
         <service
