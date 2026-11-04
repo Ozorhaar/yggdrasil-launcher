@@ -71,6 +71,20 @@
                 android:resource="@xml/runestone_clock_info" />
         </receiver>
 
+        <!-- The living fjord wallpaper. -->
+        <service
+            android:name=".wallpaper.FjordWallpaper"
+            android:exported="true"
+            android:label="@string/fjord_wallpaper_label"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/fjord_wallpaper" />
+        </service>
+
         <!-- Unread badges: counts active notifications per app. -->
         <service
             android:name=".services.BadgeService"

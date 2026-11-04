@@ -1191,6 +1191,19 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
             }
         }
 
+        Spacer(Modifier.height(10.dp))
+        RuneButton("Living fjord (moves with the real sky)") {
+            runCatching {
+                ctx.startActivity(
+                    android.content.Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+                        .putExtra(
+                            android.app.WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                            android.content.ComponentName(ctx, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordWallpaper::class.java),
+                        )
+                )
+            }.onFailure { Toast.makeText(ctx, "Couldn't open the wallpaper preview", Toast.LENGTH_SHORT).show() }
+        }
+
         Section("Backdrop")
         StatusLine("Paint the art inside the launcher instead of using the system wallpaper")
         Spacer(Modifier.height(6.dp))
