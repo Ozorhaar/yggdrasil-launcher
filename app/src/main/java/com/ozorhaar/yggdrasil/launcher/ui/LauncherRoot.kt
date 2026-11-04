@@ -177,6 +177,8 @@ fun LauncherRoot() {
     val drag = remember { DragState() }
     var dockRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var bridgeRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var hafnirGemRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var settingsGemRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val bridge by rememberBridge()
     val bridgeScope = rememberCoroutineScope()
     val rootSize = remember { IntArray(2) }
@@ -490,6 +492,17 @@ fun LauncherRoot() {
                 detectTapGestures(
                     // a tap on the dock's rune band (not an icon) wakes Hafnir
                     onTap = { p ->
+                        // the marks on the band: Hafnir (left), settings (right)
+                        if (hafnirGemRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            ctx.openAssistant()
+                            return@detectTapGestures
+                        }
+                        if (settingsGemRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            settingsOpen = true
+                            return@detectTapGestures
+                        }
                         // the bridge mark on the band opens Bifrost
                         if (bridge != null && bridgeRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -570,7 +583,8 @@ fun LauncherRoot() {
                 }
             }
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
-            Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it })
+            Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it },
+                onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it })
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -799,6 +813,8 @@ private fun Dock(
     onPlaced: (androidx.compose.ui.geometry.Rect) -> Unit,
     bridge: Bridge.Info? = null,
     onBridgePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onHafnirPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onSettingsPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()) {
         Row(
@@ -817,6 +833,24 @@ private fun Dock(
                 val loc = Loc.Dock(i)
                 Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
                     SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
+                }
+            }
+        }
+        // Hafnir above the first dock slot, settings above the last: a row laid out like the
+        // dock's own, so the marks sit over the end icons whatever the screen width.
+        if (layout.dock.size >= 2) {
+            Row(
+                Modifier.fillMaxWidth().align(Alignment.TopCenter).offset(y = (-12).dp)
+                    .padding(horizontal = if (layout.dockRunes) 12.dp else 0.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                layout.dock.indices.forEach { i ->
+                    Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) {
+                        when (i) {
+                            0 -> HafnirGem(Modifier.onGloballyPositioned { onHafnirPlaced(it.boundsInRoot()) })
+                            layout.dock.lastIndex -> SettingsGem(Modifier.onGloballyPositioned { onSettingsPlaced(it.boundsInRoot()) })
+                        }
+                    }
                 }
             }
         }
@@ -1438,7 +1472,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nTap the rune at the band's left end: Hafnir\nTap the marks at its right end: launcher settings\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
