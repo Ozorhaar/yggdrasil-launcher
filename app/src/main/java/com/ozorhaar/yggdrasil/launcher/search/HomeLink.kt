@@ -101,6 +101,23 @@ class HomeLink(context: Context) {
         prefs.edit().putStringSet("allowed", now).apply()
     }
 
+    private var chatId: String? = null
+    private var chatAt = 0L
+
+    /**
+     * Asks Hafnir (HA's conversation agent) a typed question and returns what he'd say.
+     * Follow-ups within two minutes stay in the same conversation. Blocking.
+     */
+    fun ask(text: String): String {
+        val body = JSONObject().put("text", text).put("language", "en").put("agent_id", AGENT)
+        chatId?.takeIf { System.currentTimeMillis() - chatAt < 120_000 }?.let { body.put("conversation_id", it) }
+        val r = JSONObject(request(url, token(), "POST", "/api/conversation/process", body.toString()))
+        chatId = r.optString("conversation_id").takeIf { it.isNotBlank() }
+        chatAt = System.currentTimeMillis()
+        return r.optJSONObject("response")?.optJSONObject("speech")?.optJSONObject("plain")?.optString("speech")
+            ?.takeIf { it.isNotBlank() } ?: "No answer came back."
+    }
+
     /** Runs the device's safe action. Returns its new state as HA reports it. */
     fun act(d: Device): String {
         val (_, service) = d.action ?: error("Nothing safe to do with ${d.name}")
@@ -117,7 +134,7 @@ class HomeLink(context: Context) {
         try {
             c.requestMethod = method
             c.connectTimeout = 4000
-            c.readTimeout = 6000
+            c.readTimeout = if (path.startsWith("/api/conversation")) 30000 else 6000
             c.instanceFollowRedirects = false
             c.setRequestProperty("Authorization", "Bearer $token")
             c.setRequestProperty("Content-Type", "application/json")
@@ -165,6 +182,7 @@ class HomeLink(context: Context) {
 
     companion object {
         const val DEFAULT_URL = "https://homeassistant.example"
+        const val AGENT = "conversation.hafnir_mac"
         private const val KEY_ALIAS = "ygg_home_link"
         private val DOMAINS = setOf("light", "switch", "fan", "input_boolean", "lock", "cover", "scene")
         private val SAFE_SERVICES = setOf("turn_on", "turn_off", "lock", "close_cover")

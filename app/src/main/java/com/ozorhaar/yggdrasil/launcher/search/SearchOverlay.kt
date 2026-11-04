@@ -98,6 +98,20 @@ fun SearchOverlay(
     var contactHits by remember { mutableStateOf<List<Contact>>(emptyList()) }
     var deviceHits by remember { mutableStateOf<List<HomeLink.Device>>(emptyList()) }
     var homeError by remember { mutableStateOf<String?>(null) }
+    var asked by remember { mutableStateOf<String?>(null) }
+    var answer by remember { mutableStateOf<String?>(null) }
+    var thinking by remember { mutableStateOf(false) }
+
+    fun askHafnir(text: String) {
+        if (thinking || text.isBlank()) return
+        keyboard?.hide()
+        thinking = true; asked = text; answer = null
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { home.ask(text) } }
+            thinking = false
+            answer = r.getOrElse { "Couldn't reach Hafnir: ${it.message}" }
+        }
+    }
 
     LaunchedEffect(q, contactsAllowed) {
         if (q.length < 2) { contactHits = emptyList(); deviceHits = emptyList(); return@LaunchedEffect }
@@ -136,6 +150,7 @@ fun SearchOverlay(
                 keyboardActions = KeyboardActions(onGo = {
                     when {
                         appHits.isNotEmpty() -> go { onLaunch(appHits.first()) }
+                        q.isNotEmpty() && home.configured -> askHafnir(q)
                         q.isNotEmpty() -> go { webSearch(ctx, q) }
                     }
                 }),
@@ -150,6 +165,12 @@ fun SearchOverlay(
         }
 
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+            if (asked != null) {
+                Header("Hafnir")
+                RuneText("“$asked”", 14.sp, Ygg.Ash)
+                if (thinking) RuneText("Thinking…", 18.sp, Ygg.Frost)
+                answer?.let { androidx.compose.material3.Text(it, color = Ygg.Bone, fontSize = 18.sp, modifier = Modifier.padding(top = 4.dp)) }
+            }
             if (sum != null) {
                 Header("Reckoning")
                 Hit("= $sum", "Tap to copy") {
@@ -220,6 +241,10 @@ fun SearchOverlay(
             if (settingHits.isNotEmpty()) {
                 Header("Phone settings")
                 settingHits.forEach { s -> Hit(s.label, null) { go { openSetting(ctx, s.action) } } }
+            }
+            if (q.isNotEmpty() && home.configured && q != asked) {
+                Header("Ask Hafnir")
+                Hit("“$q”", "He answers here; follow-ups for two minutes keep the thread") { askHafnir(q) }
             }
             if (q.isNotEmpty()) {
                 Header("Beyond the walls")

@@ -1129,6 +1129,8 @@ private fun AppDrawer(
 
 // =================================================================== action sheet
 
+private fun repo0(ctx: android.content.Context) = ctx.ygg.repo
+
 @Composable
 private fun ActionSheet(
     target: MenuTarget,
@@ -1161,6 +1163,33 @@ private fun ActionSheet(
                 RuneText(app.label, 22.sp, Ygg.Gold)
             }
             Spacer(Modifier.height(10.dp))
+            // its waiting notifications, unless it's locked or tucked in a locked folder
+            val guarded = layout.isLocked(app.key) || layout.folders.values.any { it.locked && app.key in it.apps }
+            val previews = Badges.previews.collectAsStateWithLifecycle().value[app.packageName].orEmpty()
+            if (previews.isNotEmpty() && !app.isShortcut) {
+                if (guarded) RuneText("${previews.size} waiting (locked: open the app to read)", 14.sp, Ygg.Ash)
+                else previews.forEach { pv ->
+                    Column(
+                        Modifier.fillMaxWidth().clickable {
+                            runCatching {
+                                val opts = if (android.os.Build.VERSION.SDK_INT >= 34)
+                                    android.app.ActivityOptions.makeBasic().setPendingIntentBackgroundActivityStartMode(
+                                        android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED).toBundle()
+                                else null
+                                if (pv.open != null) pv.open.send(ctx, 0, null, null, null, null, opts)
+                                else repo0(ctx).launch(app)
+                            }
+                            onDismiss()
+                        }.padding(vertical = 5.dp),
+                    ) {
+                        if (pv.title.isNotBlank()) RuneText(pv.title, 15.sp, Ygg.Gold)
+                        if (pv.text.isNotBlank()) Text(pv.text, color = Ygg.Bone, fontSize = 14.sp, maxLines = 3)
+                    }
+                }
+                Canvas(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(6.dp)) {
+                    drawLine(Ygg.Gold.copy(alpha = 0.35f), Offset(0f, size.height), Offset(size.width, 0f), strokeWidth = 2f)
+                }
+            }
             val repo = ctx.ygg.repo
             // the app's own shortcuts (Home Assistant's Assist, a contact, a new message...)
             val shortcuts = remember(app.key) { repo.shortcutsFor(app) }
