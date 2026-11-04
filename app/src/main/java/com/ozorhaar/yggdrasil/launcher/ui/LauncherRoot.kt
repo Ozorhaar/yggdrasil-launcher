@@ -492,7 +492,7 @@ fun LauncherRoot() {
                 detectTapGestures(
                     // a tap on the dock's rune band (not an icon) wakes Hafnir
                     onTap = { p ->
-                        // the marks on the band: Hafnir (left), settings (right)
+                        // the marks on the band: settings (left), Hafnir (right)
                         if (hafnirGemRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             ctx.openAssistant()
@@ -836,7 +836,7 @@ private fun Dock(
                 }
             }
         }
-        // Hafnir above the first dock slot, settings above the last: a row laid out like the
+        // Settings above the first dock slot, Hafnir above the last: a row laid out like the
         // dock's own, so the marks sit over the end icons whatever the screen width.
         if (layout.dock.size >= 2) {
             Row(
@@ -847,8 +847,8 @@ private fun Dock(
                 layout.dock.indices.forEach { i ->
                     Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) {
                         when (i) {
-                            0 -> HafnirGem(Modifier.onGloballyPositioned { onHafnirPlaced(it.boundsInRoot()) })
-                            layout.dock.lastIndex -> SettingsGem(Modifier.onGloballyPositioned { onSettingsPlaced(it.boundsInRoot()) })
+                            0 -> SettingsGem(Modifier.onGloballyPositioned { onSettingsPlaced(it.boundsInRoot()) })
+                            layout.dock.lastIndex -> HafnirGem(Modifier.onGloballyPositioned { onHafnirPlaced(it.boundsInRoot()) })
                         }
                     }
                 }
@@ -1472,7 +1472,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nTap the rune at the band's left end: Hafnir\nTap the marks at its right end: launcher settings\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
