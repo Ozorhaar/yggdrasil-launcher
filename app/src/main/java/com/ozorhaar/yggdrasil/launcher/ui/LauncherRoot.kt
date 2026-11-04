@@ -275,6 +275,24 @@ fun LauncherRoot() {
         )
     }
 
+    // an app's shortcut entry from the widget list: run its setup screen, then pin what it hands back
+    val shortcutSetup = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        if (r.resultCode != android.app.Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val key = ygg.repo.acceptPin(r.data)
+        if (key != null) layout.addToHome(key, pendingPage)
+        else Toast.makeText(ctx, "That app didn't hand back a shortcut", Toast.LENGTH_SHORT).show()
+    }
+
+    fun addShortcutFromList(info: android.content.pm.LauncherActivityInfo) {
+        widgetPicker = false
+        pendingPage = pager.currentPage
+        val sender = ygg.repo.shortcutConfigIntent(info)
+        if (sender == null) {
+            Toast.makeText(ctx, "Couldn't open that shortcut", Toast.LENGTH_SHORT).show(); return
+        }
+        shortcutSetup.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
+    }
+
     fun removeWidget(id: Int) {
         layout.removeWidget(id)
         ygg.widgetViews.remove(id)
@@ -554,7 +572,12 @@ fun LauncherRoot() {
             onClose = { homeMenu = false },
         )
         AnimatedVisibility(widgetPicker, enter = fadeIn(), exit = fadeOut()) {
-            WidgetPicker(layout.columns, layout.rows, onPick = { addWidget(it) }, onClose = { widgetPicker = false })
+            WidgetPicker(
+                layout.columns, layout.rows,
+                onPick = { addWidget(it) },
+                onPickShortcut = { addShortcutFromList(it) },
+                onClose = { widgetPicker = false },
+            )
         }
         widgetMenu?.let { id -> layout.widgets.firstOrNull { it.id == id } }?.let { spot ->
             WidgetSheet(spot, layout, onRemove = { removeWidget(spot.id) }, onClose = { widgetMenu = null })

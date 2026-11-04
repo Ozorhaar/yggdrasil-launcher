@@ -110,24 +110,43 @@ fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
     )
 }
 
-private class ProviderRow(val info: AppWidgetProviderInfo, val app: String, val label: String)
+/** A row in the picker: a widget, or an app's 1x1 shortcut entry (like Home Assistant's Assist). */
+private class ProviderRow(
+    val info: AppWidgetProviderInfo?,
+    val shortcut: android.content.pm.LauncherActivityInfo?,
+    val app: String,
+    val label: String,
+) {
+    val id: String get() = info?.provider?.flattenToString() ?: ("sc:" + shortcut!!.componentName.flattenToString())
+    val pkg: String get() = info?.provider?.packageName ?: shortcut!!.componentName.packageName
+}
 
 /** Every widget on the phone, grouped by app, with previews. */
 @Composable
-fun WidgetPicker(cols: Int, rows: Int, onPick: (AppWidgetProviderInfo) -> Unit, onClose: () -> Unit) {
+fun WidgetPicker(
+    cols: Int,
+    rows: Int,
+    onPick: (AppWidgetProviderInfo) -> Unit,
+    onPickShortcut: (android.content.pm.LauncherActivityInfo) -> Unit,
+    onClose: () -> Unit,
+) {
     val ctx = LocalContext.current
     val pm = ctx.packageManager
     val all by produceState<List<ProviderRow>?>(null) {
         value = withContext(Dispatchers.IO) {
-            ctx.ygg.widgetManager.getInstalledProvidersForProfile(Process.myUserHandle())
+            fun appName(pkg: String) = runCatching {
+                pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            }.getOrDefault(pkg)
+            val widgets = ctx.ygg.widgetManager.getInstalledProvidersForProfile(Process.myUserHandle())
                 .filter { it.widgetCategory and AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN != 0 }
                 .map { info ->
-                    val app = runCatching {
-                        pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
-                    }.getOrDefault(info.provider.packageName)
-                    ProviderRow(info, app, info.loadLabel(pm) ?: app)
+                    val app = appName(info.provider.packageName)
+                    ProviderRow(info, null, app, info.loadLabel(pm) ?: app)
                 }
-                .sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
+            val shortcuts = ctx.ygg.repo.shortcutConfigs().map { sc ->
+                ProviderRow(null, sc, appName(sc.componentName.packageName), sc.label?.toString() ?: "Shortcut")
+            }
+            (widgets + shortcuts).sortedWith(compareBy({ it.app.lowercase() }, { it.shortcut != null }, { it.label.lowercase() }))
         }
     }
     var query by remember { mutableStateOf("") }
@@ -167,29 +186,51 @@ fun WidgetPicker(cols: Int, rows: Int, onPick: (AppWidgetProviderInfo) -> Unit, 
             shown.forEach { row ->
                 if (row.app != lastApp) {
                     lastApp = row.app
-                    item(key = "h:" + row.app + row.info.provider.packageName) {
+                    item(key = "h:" + row.app + row.pkg) {
                         Box(Modifier.padding(top = 16.dp, bottom = 4.dp)) { RuneText(row.app, 19.sp, Ygg.Frost) }
                     }
                 }
-                item(key = row.info.provider.flattenToString()) {
-                    val (w, h) = cellsFor(ctx, row.info, cols, rows)
+                item(key = row.id) {
+                    val info = row.info
+                    val sc = row.shortcut
+                    val size = if (info != null) cellsFor(ctx, info, cols, rows).let { (w, h) -> "$w × $h" } else "Shortcut · 1 × 1"
                     Row(
                         Modifier.fillMaxWidth()
-                            .clickable { onPick(row.info) }
+                            .clickable { if (info != null) onPick(info) else if (sc != null) onPickShortcut(sc) }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        WidgetPreview(row.info, Modifier.width(120.dp).heightIn(min = 48.dp, max = 110.dp))
+                        val box = Modifier.width(120.dp).heightIn(min = 48.dp, max = 110.dp)
+                        if (info != null) WidgetPreview(info, box) else if (sc != null) ShortcutPreview(sc, box)
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
                             Text(row.label, style = TextStyle(color = Ygg.Bone, fontSize = 16.sp))
-                            Text("$w × $h", style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
+                            Text(size, style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
                         }
                     }
                 }
             }
             item { Spacer(Modifier.height(30.dp)) }
         }
+    }
+}
+
+@Composable
+private fun ShortcutPreview(sc: android.content.pm.LauncherActivityInfo, modifier: Modifier) {
+    val ctx = LocalContext.current
+    val bmp by produceState<ImageBitmap?>(null, sc.componentName) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val d = sc.getIcon(ctx.resources.displayMetrics.densityDpi) ?: return@runCatching null
+                val bm = Bitmap.createBitmap(144, 144, Bitmap.Config.ARGB_8888)
+                d.setBounds(0, 0, 144, 144)
+                d.draw(Canvas(bm))
+                bm.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    Box(modifier, contentAlignment = Alignment.Center) {
+        bmp?.let { Image(it, contentDescription = null, modifier = Modifier.width(48.dp).heightIn(max = 48.dp)) }
     }
 }
 

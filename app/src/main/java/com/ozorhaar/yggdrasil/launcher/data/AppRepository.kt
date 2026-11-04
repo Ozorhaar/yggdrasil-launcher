@@ -164,6 +164,23 @@ class AppRepository(private val context: Context) {
         }
     }
 
+    /** Apps' "shortcut" entries for the widget list (e.g. Home Assistant's Assist). */
+    fun shortcutConfigs(): List<LauncherActivityInfo> = runCatching {
+        launcherApps.getShortcutConfigActivityList(null, android.os.Process.myUserHandle())
+    }.getOrDefault(emptyList())
+
+    fun shortcutConfigIntent(info: LauncherActivityInfo): android.content.IntentSender? =
+        runCatching { launcherApps.getShortcutConfigActivityIntent(info) }.getOrNull()
+
+    /** Accepts the shortcut an app handed back (from its setup screen or a pin request). Returns its key. */
+    fun acceptPin(data: android.content.Intent?): String? {
+        val req = data?.let { runCatching { launcherApps.getPinItemRequest(it) }.getOrNull() } ?: return null
+        val s = req.shortcutInfo ?: return null
+        if (!req.isValid || !runCatching { req.accept() }.getOrDefault(false)) return null
+        reloadShortcuts()
+        return shortcutKey(s.`package`, s.id, s.userHandle)
+    }
+
     fun launchShortcut(s: ShortcutInfo) {
         runCatching { launcherApps.startShortcut(s, null, null) }
     }
