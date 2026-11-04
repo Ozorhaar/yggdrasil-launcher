@@ -61,6 +61,8 @@ class LayoutStore(context: Context) {
         private set
     var runicLabels by mutableStateOf(prefs.getBoolean("runic_labels", true))
         private set
+    var dockRunes by mutableStateOf(prefs.getBoolean("dock_runes", true))
+        private set
     /** How much to darken the wallpaper, 0-60 (percent). */
     var wallShade by mutableStateOf(prefs.getInt("wall_shade", 0))
         private set
@@ -146,6 +148,7 @@ class LayoutStore(context: Context) {
             .putInt("columns", columns)
             .putString("mode", layoutMode.name)
             .putBoolean("runic_labels", runicLabels)
+            .putBoolean("dock_runes", dockRunes)
             .putInt("wall_shade", wallShade)
             .putString("backdrop", backdrop)
             .putBoolean("initialized", true)
@@ -375,6 +378,7 @@ class LayoutStore(context: Context) {
     // ------------------------------------------------------------ settings
     fun updateLayoutMode(m: LayoutMode) { layoutMode = m; save() }
     fun updateRunicLabels(on: Boolean) { runicLabels = on; save() }
+    fun updateDockRunes(on: Boolean) { dockRunes = on; save() }
     fun updateWallShade(pct: Int) { wallShade = pct.coerceIn(0, 60); save() }
     fun updateBackdrop(name: String) { backdrop = name; save() }
 

@@ -740,9 +740,11 @@ private fun Dock(
         Modifier
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .fillMaxWidth()
-            .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(30.dp))
-            .border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(30.dp))
-            .padding(vertical = 6.dp),
+            .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
+            .then(
+                if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Ygg.Gold).padding(horizontal = 12.dp, vertical = 14.dp)
+                else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
+            ),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1205,6 +1207,13 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
                 Choice(if (pct == 0) "Off" else "$pct%", layout.wallShade == pct) { layout.updateWallShade(pct) }
             }
         }
+
+        Section("Rune band on the dock")
+        Switch(
+            checked = layout.dockRunes,
+            onCheckedChange = { layout.updateDockRunes(it) },
+            colors = SwitchDefaults.colors(checkedThumbColor = Ygg.Night, checkedTrackColor = Ygg.Gold),
+        )
 
         Section("Runic labels")
         Switch(
