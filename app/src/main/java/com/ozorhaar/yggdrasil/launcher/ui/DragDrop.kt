@@ -1,5 +1,6 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Dp
@@ -124,6 +129,29 @@ fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons,
                     }
                 }
             }
+        }
+        val rune = emblemFor(folder.emblem, folder.name, folder.id)
+        if (rune >= 0) {
+            val m = size * 0.34f
+            Box(
+                Modifier.align(Alignment.BottomStart).offset(x = -(size * 0.16f), y = size * 0.16f)
+                    .size(m)
+                    .background(Ygg.Night, CutCornerShape(m * 0.3f))
+                    .border(1.dp, Ygg.Gold, CutCornerShape(m * 0.3f)),
+                contentAlignment = Alignment.Center,
+            ) { RuneGlyph(rune, m * 0.62f, Ygg.GoldHi) }
+        }
+    }
+}
+
+/** One rune drawn as carved strokes, [height] tall. */
+@Composable
+fun RuneGlyph(index: Int, height: Dp, color: Color) {
+    Canvas(Modifier.size(height * 0.7f, height)) {
+        val h = size.height
+        val w = h * 0.6f
+        translate(size.width / 2f, h / 2f) {
+            drawRune(RUNES[index], w, h, color, Stroke(width = (h * 0.11f).coerceAtLeast(1.5f), cap = StrokeCap.Round))
         }
     }
 }

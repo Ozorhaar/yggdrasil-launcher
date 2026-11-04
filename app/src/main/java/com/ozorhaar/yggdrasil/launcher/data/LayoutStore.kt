@@ -20,8 +20,10 @@ sealed interface Loc {
 }
 
 /** A folder of apps. It sits in a home or dock slot as the reference "folder:<id>". */
-class Folder(val id: String, name: String, apps: List<String>) {
+class Folder(val id: String, name: String, apps: List<String>, emblem: Int = -2) {
     var name by mutableStateOf(name)
+    /** Rune index for the folder's emblem; -2 = pick from the name, -1 = none. */
+    var emblem by mutableStateOf(emblem)
     val apps: SnapshotStateList<String> = mutableStateListOf<String>().apply { addAll(apps) }
     val ref: String get() = FOLDER_PREFIX + id
 }
@@ -85,7 +87,7 @@ class LayoutStore(context: Context) {
             obj.keys().forEach { id ->
                 val f = obj.getJSONObject(id)
                 val list = f.optJSONArray("apps") ?: JSONArray()
-                folders[id] = Folder(id, f.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) })
+                folders[id] = Folder(id, f.optString("name", DEFAULT_FOLDER_NAME), (0 until list.length()).map { list.getString(it) }, f.optInt("emblem", -2))
             }
         }
         widgets.clear()
@@ -128,7 +130,7 @@ class LayoutStore(context: Context) {
         val d = JSONArray().apply { dock.forEach { put(it ?: JSONObject.NULL) } }
         val f = JSONObject()
         folders.values.forEach { folder ->
-            f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList())))
+            f.put(folder.id, JSONObject().put("name", folder.name).put("apps", JSONArray(folder.apps.toList())).put("emblem", folder.emblem))
         }
         val wj = JSONArray()
         widgets.forEach { s ->
@@ -321,6 +323,11 @@ class LayoutStore(context: Context) {
     fun removeWidget(id: Int) {
         widgets.removeAll { it.id == id }
         trimEmptyPages(); save()
+    }
+
+    fun setEmblem(id: String, emblem: Int) {
+        folders[id]?.emblem = emblem
+        save()
     }
 
     fun renameFolder(id: String, name: String) {

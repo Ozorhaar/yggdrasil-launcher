@@ -775,6 +775,7 @@ private fun FolderPopup(
 ) {
     var editing by remember(folder.id) { mutableStateOf(false) }
     var name by remember(folder.id) { mutableStateOf(folder.name) }
+    var picking by remember(folder.id) { mutableStateOf(false) }
     val keyboard = LocalSoftwareKeyboardController.current
     fun commit() {
         layout.renameFolder(folder.id, name); name = folder.name; editing = false; keyboard?.hide()
@@ -819,6 +820,46 @@ private fun FolderPopup(
                         RuneText(folder.name, 26.sp, Ygg.Gold)
                     }
                     RuneButton("Rename") { name = folder.name; editing = true }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                val shown = emblemFor(folder.emblem, folder.name, folder.id)
+                Box(
+                    Modifier.size(34.dp).background(Ygg.Night, CutCornerShape(10.dp))
+                        .border(1.dp, Ygg.Gold, CutCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center,
+                ) { if (shown >= 0) RuneGlyph(shown, 21.dp, Ygg.GoldHi) }
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.weight(1f)) {
+                    RuneText(
+                        when {
+                            shown < 0 -> "No emblem"
+                            folder.emblem == EMBLEM_AUTO -> RUNE_NAMES[shown] + " (from the name)"
+                            else -> RUNE_NAMES[shown]
+                        },
+                        14.sp, Ygg.Bone,
+                    )
+                }
+                RuneButton(if (picking) "Done" else "Emblem") { picking = !picking }
+            }
+            if (picking) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    @Composable
+                    fun choice(selected: Boolean, onPick: () -> Unit, content: @Composable () -> Unit) = Box(
+                        Modifier.size(42.dp)
+                            .background(if (selected) Ygg.Gold.copy(alpha = 0.25f) else Ygg.Night, CutCornerShape(10.dp))
+                            .border(1.dp, Ygg.Gold.copy(alpha = if (selected) 1f else 0.4f), CutCornerShape(10.dp))
+                            .clickable { onPick() },
+                        contentAlignment = Alignment.Center,
+                    ) { content() }
+                    choice(folder.emblem == EMBLEM_AUTO, { layout.setEmblem(folder.id, EMBLEM_AUTO) }) { RuneText("Auto", 11.sp, Ygg.Bone) }
+                    choice(folder.emblem == EMBLEM_NONE, { layout.setEmblem(folder.id, EMBLEM_NONE) }) { RuneText("None", 11.sp, Ygg.Bone) }
+                    RUNE_NAMES.indices.forEach { i ->
+                        choice(folder.emblem == i, { layout.setEmblem(folder.id, i) }) { RuneGlyph(i, 24.dp, Ygg.GoldHi) }
+                    }
                 }
             }
             Canvas(Modifier.fillMaxWidth().padding(vertical = 8.dp).height(6.dp)) {

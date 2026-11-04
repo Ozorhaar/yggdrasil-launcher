@@ -22,7 +22,7 @@ import kotlin.math.sin
  * Sowilo, tiwaz, algiz and othala are left out on purpose: they're the ones that
  * hate groups have taken over. Jera too, since at this size it reads like sowilo.
  */
-private val RUNES: List<List<FloatArray>> = listOf(
+internal val RUNES: List<List<FloatArray>> = listOf(
     /* fehu     */ listOf(f(0f, 0f, 0f, 1f), f(0f, .35f, .5f, .05f), f(0f, .62f, .5f, .32f)),
     /* uruz     */ listOf(f(0f, 0f, 0f, 1f), f(0f, 0f, .5f, .3f), f(.5f, .3f, .5f, 1f)),
     /* thurisaz */ listOf(f(0f, 0f, 0f, 1f), f(0f, .28f, .45f, .5f), f(.45f, .5f, 0f, .72f)),
@@ -117,7 +117,7 @@ fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color): Modifier = drawBehi
     }
 }
 
-private fun DrawScope.drawRune(segs: List<FloatArray>, w: Float, h: Float, color: Color, stroke: Stroke) {
+internal fun DrawScope.drawRune(segs: List<FloatArray>, w: Float, h: Float, color: Color, stroke: Stroke) {
     val ox = -w / 2f
     val oy = -h / 2f
     val sx = w / 0.6f
@@ -133,3 +133,42 @@ private fun DrawScope.drawRune(segs: List<FloatArray>, w: Float, h: Float, color
 }
 
 private fun Int.dp(scope: DrawScope): Float = with(scope) { this@dp.toFloat() * density }
+
+/** Names and meanings for the runes above, same order (used for folder emblems). */
+internal val RUNE_NAMES = listOf(
+    "Fehu · wealth", "Uruz · strength", "Thurisaz · thorn", "Ansuz · speech", "Raido · journey",
+    "Kenaz · torch, craft", "Gebo · gift", "Wunjo · joy", "Hagalaz · hail", "Naudiz · need",
+    "Isa · ice", "Eihwaz · yew, guard", "Perthro · lot-cup, chance", "Berkano · birch, growth", "Ehwaz · horse",
+    "Mannaz · people", "Laguz · water", "Ingwaz · hearth, home", "Dagaz · day",
+)
+
+/** Folder emblem settings: [EMBLEM_AUTO] picks from the folder's name, [EMBLEM_NONE] hides it. */
+const val EMBLEM_AUTO = -2
+const val EMBLEM_NONE = -1
+
+private val EMBLEM_WORDS: List<Pair<Int, List<String>>> = listOf(
+    0 to listOf("money", "bank", "financ", "pay", "wallet", "crypto", "budget", "stock", "invest"),
+    1 to listOf("fit", "gym", "health", "workout", "sport", "run"),
+    11 to listOf("secur", "vpn", "password", "auth", "privacy", "guard", "camera", "nvr"),
+    3 to listOf("chat", "messag", "social", "talk", "mail", "comm", "news"),
+    4 to listOf("travel", "map", "nav", "car", "drive", "trip", "flight", "transit"),
+    5 to listOf("tool", "util", "work", "office", "create", "photo", "edit", "dev", "code", "make"),
+    6 to listOf("shop", "store", "gift", "buy", "amazon", "deal"),
+    7 to listOf("game", "play", "fun", "music", "media", "video", "tv", "stream", "watch", "listen"),
+    8 to listOf("weather", "storm"),
+    9 to listOf("system", "setting", "need", "admin"),
+    13 to listOf("grow", "garden", "learn", "book", "read", "school", "kid", "family"),
+    15 to listOf("people", "contact", "friend"),
+    16 to listOf("water", "sea", "fish", "boat", "drink", "food", "cook", "recipe"),
+    17 to listOf("home", "house", "hearth", "smart", "hass", "assistant", "longhouse"),
+    18 to listOf("day", "calendar", "plan", "task", "todo", "note", "time", "clock"),
+)
+
+/** The rune a folder shows: its own choice, or one that suits its name. */
+fun emblemFor(choice: Int, name: String, id: String): Int {
+    if (choice >= 0) return choice.coerceAtMost(RUNES.size - 1)
+    if (choice == EMBLEM_NONE) return EMBLEM_NONE
+    val n = name.lowercase()
+    EMBLEM_WORDS.firstOrNull { (_, words) -> words.any { it in n } }?.let { return it.first }
+    return Math.floorMod(id.hashCode(), RUNES.size)
+}
