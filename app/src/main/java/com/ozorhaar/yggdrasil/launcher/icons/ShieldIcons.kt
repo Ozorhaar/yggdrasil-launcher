@@ -24,8 +24,12 @@ class ShieldIcons(private val sizePx: Int, private val iconOf: (AppEntry) -> Dra
 
     private val cache = LruCache<String, ImageBitmap>(400)
 
-    fun get(app: AppEntry): ImageBitmap =
-        cache.get(app.key) ?: render(app).also { cache.put(app.key, it) }
+    fun get(app: AppEntry): ImageBitmap {
+        // Keyed by the installed copy too (its path changes on every update), so an app that
+        // changes its icon gets a freshly carved shield instead of the one cached before.
+        val k = app.key + "@" + (app.info?.applicationInfo?.sourceDir ?: "")
+        return cache.get(k) ?: render(app).also { cache.put(k, it) }
+    }
 
     fun clear() = cache.evictAll()
 
