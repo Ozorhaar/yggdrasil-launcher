@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -82,9 +83,10 @@ fun Modifier.widgetCell(drag: DragState, id: Int, page: Int): Modifier {
 /** The live widget itself (a classic Android view inside Compose). */
 @Composable
 fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
+    if (spot.provider == Skald.PROVIDER) { SkaldCard(); return }
     val ctx = LocalContext.current
     val ygg = ctx.ygg
-    val info = remember(spot.id) { ygg.widgetManager.getAppWidgetInfo(spot.id) }
+    val info = remember(spot.id) { runCatching { ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
     if (info == null) {
         Box(
             Modifier.fillMaxSize()
@@ -94,7 +96,16 @@ fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
         ) { RuneText("Widget unavailable. Hold to remove.", 13.sp, Ygg.Ash) }
         return
     }
-    AndroidView(
+    // every app widget sits in a carved gold frame on night, so its own colours stay inside the theme
+    val frame = CutCornerShape(14.dp)
+    Box(
+        Modifier.fillMaxSize()
+            .clip(frame)
+            .background(Ygg.Night, frame)
+            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), frame)
+            .padding(3.dp)
+            .clip(CutCornerShape(12.dp)),
+    ) { AndroidView(
         factory = { c ->
             val v = ygg.widgetViews.getOrPut(spot.id) { ygg.widgetHost.createView(c, spot.id, info) }
             (v.parent as? ViewGroup)?.removeView(v)
@@ -108,7 +119,7 @@ fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
                 runCatching { v.updateAppWidgetSize(Bundle(), listOf(size)) }
             }
         },
-    )
+    ) }
 }
 
 /** A row in the picker: a widget, or an app's 1x1 shortcut entry (like Home Assistant's Assist). */
@@ -129,6 +140,7 @@ fun WidgetPicker(
     rows: Int,
     onPick: (AppWidgetProviderInfo) -> Unit,
     onPickShortcut: (android.content.pm.LauncherActivityInfo) -> Unit,
+    onPickSkald: () -> Unit,
     onClose: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -183,6 +195,28 @@ fun WidgetPicker(
             RuneText("Gathering widgets…", 16.sp, Ygg.Ash); return@Column
         }
         LazyColumn(Modifier.fillMaxSize()) {
+            // Yggdrasil's own widgets first
+            if (query.isBlank() || "skald now playing music yggdrasil".looselyHas(query)) {
+                item(key = "h:yggdrasil") {
+                    Box(Modifier.padding(top = 16.dp, bottom = 4.dp)) { RuneText("Yggdrasil", 19.sp, Ygg.Frost) }
+                }
+                item(key = Skald.PROVIDER) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onPickSkald() }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(120.dp).height(52.dp)) {
+                            SkaldCard()
+                            Box(Modifier.matchParentSize().clickable { onPickSkald() }) // a tap picks it, never plays
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Skald: now playing", style = TextStyle(color = Ygg.Bone, fontSize = 16.sp))
+                            Text("${Skald.WIDTH} × ${Skald.HEIGHT} · any music app", style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
+                        }
+                    }
+                }
+            }
             var lastApp = ""
             shown.forEach { row ->
                 if (row.app != lastApp) {
@@ -262,8 +296,9 @@ private fun WidgetPreview(info: AppWidgetProviderInfo, modifier: Modifier) {
 @Composable
 fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
-    val info = remember(spot.id) { ctx.ygg.widgetManager.getAppWidgetInfo(spot.id) }
-    val name = remember(info) { info?.loadLabel(ctx.packageManager) ?: "Widget" }
+    val builtin = Skald.isBuiltin(spot.provider)
+    val info = remember(spot.id) { if (builtin) null else runCatching { ctx.ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
+    val name = remember(info) { if (builtin) "Skald (now playing)" else info?.loadLabel(ctx.packageManager) ?: "Widget" }
     val resizable = info == null || info.resizeMode != AppWidgetProviderInfo.RESIZE_NONE
     Box(
         Modifier.fillMaxSize().background(Color(0x99000000))

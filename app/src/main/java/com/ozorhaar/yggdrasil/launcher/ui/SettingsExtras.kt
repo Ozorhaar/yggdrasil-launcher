@@ -200,12 +200,13 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
             }.getOrElse { Toast.makeText(ctx, "Couldn't read that file", Toast.LENGTH_LONG).show(); return@launch }
             val msg = runCatching {
                 val (oldIds, missing) = layout.importJson(JSONObject(text)) { provider ->
+                    if (provider == Skald.PROVIDER) return@importJson Skald.ID
                     val cn = ComponentName.unflattenFromString(provider) ?: return@importJson null
                     val id = ygg.widgetHost.allocateAppWidgetId()
                     if (ygg.widgetManager.bindAppWidgetIdIfAllowed(id, cn)) id
                     else { runCatching { ygg.widgetHost.deleteAppWidgetId(id) }; null }
                 }
-                oldIds.forEach { id -> ygg.widgetViews.remove(id); runCatching { ygg.widgetHost.deleteAppWidgetId(id) } }
+                oldIds.forEach { id -> ygg.widgetViews.remove(id); if (id >= 0) runCatching { ygg.widgetHost.deleteAppWidgetId(id) } }
                 if (missing.isEmpty()) "Layout restored"
                 else "Layout restored. Add these widgets again: " + missing.joinToString { it.substringBefore('/').substringAfterLast('.') }
             }.getOrElse { "Restore failed: ${it.message}" }

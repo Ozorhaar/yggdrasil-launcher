@@ -331,7 +331,7 @@ fun LauncherRoot() {
     fun removeWidget(id: Int) {
         layout.removeWidget(id)
         ygg.widgetViews.remove(id)
-        runCatching { widgetHost.deleteAppWidgetId(id) }
+        if (id >= 0) runCatching { widgetHost.deleteAppWidgetId(id) }
         widgetMenu = null
     }
 
@@ -658,6 +658,13 @@ fun LauncherRoot() {
                 layout.columns, layout.rows,
                 onPick = { addWidget(it) },
                 onPickShortcut = { addShortcutFromList(it) },
+                onPickSkald = {
+                    widgetPicker = false
+                    if (layout.widgets.none { it.provider == Skald.PROVIDER }) {
+                        val page = layout.addWidget(Skald.ID, Skald.PROVIDER, Skald.WIDTH, Skald.HEIGHT, pager.currentPage)
+                        scope.launch { delay(50); pager.animateScrollToPage(page) }
+                    } else Toast.makeText(ctx, "The Skald is already on your home screen", Toast.LENGTH_SHORT).show()
+                },
                 onClose = { widgetPicker = false },
             )
         }
