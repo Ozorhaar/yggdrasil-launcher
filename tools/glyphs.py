@@ -118,15 +118,59 @@ G["anvil"] = [("M30,52 L66,52 C70,52 76,50 80,47 C78,53 72,57 66,57.5 L61,58 C59
                "L42,71 L42,66 L46.5,66 C47.5,63 47,60 45,58 L38,57.5 C34,57.2 31,55 30,52 Z", False),
               ("M44,36 L58,36 L58,44 L44,44 Z M57,38.6 L74,35.8 L75,39.4 L57.6,41.6 Z", False)]
 
-# Gallery: a framed fjord at dusk
-G["gallery"] = [(rect(33, 36, 75, 72) + " " + rect(36.6, 39.6, 71.4, 68.4), True),
-                ("M36.6,68.4 L36.6,62 L46,50 L52,57 L58,48.5 L71.4,63 L71.4,68.4 Z " + circ(63.5, 46, 3.6), False)]
+# Gallery: a Gotland picture stone with a longship under sail and waves carved through it
+G["gallery"] = [("M40,76 L40,46 C40,34 46,27 54,27 C62,27 68,34 68,46 L68,76 Z "
+                 "M43,61.6 L46.2,61.6 C48.6,63.4 59.4,63.4 61.8,61.6 L65,61.6 C63.4,66.6 44.6,66.6 43,61.6 Z "
+                 "M43,61.6 L42,57.4 L43.6,57.2 L45,61.6 Z M65,61.6 L66,57.4 L64.4,57.2 L63,61.6 Z "
+                 "M53.3,44 L54.7,44 L54.7,61.2 L53.3,61.2 Z M46.8,46 L61.2,46 L60.2,58.6 L47.8,58.6 Z "
+                 "M42.6,69.6 C45,68.2 47,68.2 49,69.6 C51,71 53,71 55,69.6 C57,68.2 59,68.2 61,69.6 C62.6,70.6 64,70.8 65.4,70.2 "
+                 "L65.4,71.8 C63.6,72.6 62,72.4 60.4,71.2 C58.6,69.9 57.4,69.9 55.6,71.2 C53.6,72.6 50.4,72.6 48.4,71.2 "
+                 "C46.6,69.9 45.4,69.9 43.6,71.2 L42.6,71.8 Z " + circ(54, 37.4, 3), True)]
 
-FACES = {"calendar": "#E8DCC4", "voicemail": "#A67C4E", "calculator": "#E8DCC4", "mail": "#8FC4E0",
-         "dice": "#E0703A", "anvil": "#A67C4E", "gallery": "#8FC4E0"}  # preview only; Glyphs.kt holds the real ones
+# Brave: a spangenhelm with eye guards and nasal (no horns)
+G["helm"] = [("M36,58 C36,42 44,32 54,32 C64,32 72,42 72,58 L72,66 C72,69 70,71 67,71 L62,71 C60,71 59,70 59,68 "
+              "L59,62 C59,60.4 57.6,59.4 56,60 L55.6,72 L52.4,72 L52,60 C50.4,59.4 49,60.4 49,62 L49,68 C49,70 48,71 46,71 "
+              "L41,71 C38,71 36,69 36,66 Z "
+              "M40.6,57 C42,54 46,53.4 50,54.6 L50.6,57.6 C47,57 43.4,57.4 40.6,59.4 Z "
+              "M67.4,57 C66,54 62,53.4 58,54.6 L57.4,57.6 C61,57 64.6,57.4 67.4,59.4 Z "
+              "M36.4,50.6 C46,47.6 62,47.6 71.6,50.6 L71.8,53 C62,50.2 46,50.2 36.2,53 Z "
+              "M52.8,32.4 L55.2,32.4 L55.2,48.6 L52.8,48.6 Z", True)]
+
+
+def arc2(cx, cy, r, w, a0, a1):
+    p = lambda r, a: (cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a)))
+    x0, y0 = p(r, a0); x1, y1 = p(r, a1); x2, y2 = p(r + w, a1); x3, y3 = p(r + w, a0)
+    return f"M{x0:.2f},{y0:.2f} A{r},{r} 0 0 1 {x1:.2f},{y1:.2f} L{x2:.2f},{y2:.2f} A{r+w},{r+w} 0 0 0 {x3:.2f},{y3:.2f} Z"
+
+
+# Assist (Home Assistant's voice): ansuz, the rune of Odin's speech, sounding
+G["assist"] = [("M47,30 L51.4,30 L51.4,78 L47,78 Z M51.4,33.4 L64,41.4 L61.8,45 L51.4,38.4 Z "
+                "M51.4,45.4 L64,53.4 L61.8,57 L51.4,50.4 Z", False),
+               (arc2(62, 60, 6, 2.4, -50, 50), False), (arc2(62, 60, 11, 2.4, -50, 50), False)]
+
+
+def board(x0, y0, x1, y1, w):
+    dx, dy = x1 - x0, y1 - y0; L = math.hypot(dx, dy); nx, ny = -dy / L * w / 2, dx / L * w / 2
+    return f"M{x0+nx:.2f},{y0+ny:.2f} L{x1+nx:.2f},{y1+ny:.2f} L{x1-nx:.2f},{y1-ny:.2f} L{x0-nx:.2f},{y0-ny:.2f} Z"
+
+
+# Home Assistant: a Norse longhouse gable, steep roof with crossed bargeboards, door
+G["longhouse"] = [("M29,60.6 L54,38.4 L79,60.6 L74,60.6 L54,43.2 L34,60.6 Z", False),
+                  ("M37,60.6 L54,45.4 L71,60.6 L71,75 L37,75 Z "
+                   "M50.2,75 L50.2,66.6 C50.2,63.6 57.8,63.6 57.8,66.6 L57.8,75 Z", True),
+                  (board(46, 44, 62.6, 28.6, 2.6) + " " + board(62, 44, 45.4, 28.6, 2.6), False)]
+
+# Sense (home energy): Mjolnir with a lightning bolt on its head and a bound grip
+G["mjolnir"] = [("M38,36 L70,36 C71.6,36 72.6,37 72.6,38.6 L72.6,46.4 C72.6,48 71.6,49 70,49 L58,49 L58,70 "
+                 "C58,71.4 59.6,72 59.6,73.6 C59.6,75.4 58,77 54,77 C50,77 48.4,75.4 48.4,73.6 C48.4,72 50,71.4 50,70 "
+                 "L50,49 L38,49 C36.4,49 35.4,48 35.4,46.4 L35.4,38.6 C35.4,37 36.4,36 38,36 Z "
+                 "M56.4,38.4 L49.6,43.2 L53.4,43.6 L51.2,47.4 L58.6,41.8 L54.6,41.4 Z "
+                 "M50,56 L58,54.6 L58,56.2 L50,57.6 Z M50,61 L58,59.6 L58,61.2 L50,62.6 Z M50,66 L58,64.6 L58,66.2 L50,67.6 Z", True)]
+
+FACES = {n: "#C8A25A" for n in G}  # preview only: every shield is gold; Glyphs.kt holds each accent ring
 DESC = {"calendar": "a runestone carved with day-marks and a sun ring", "voicemail": "Gjallarhorn sounding",
         "calculator": "crossed tally sticks", "mail": "a folded letter under a wax seal", "dice": "two bone dice, rolling the bones",
-        "anvil": "the smith's anvil and hammer", "gallery": "a framed fjord at dusk"}
+        "anvil": "the smith's anvil and hammer", "gallery": "a Gotland picture stone carved with a longship", "helm": "a spangenhelm, for Brave", "assist": "ansuz, the rune of speech, sounding", "longhouse": "a longhouse gable with crossed bargeboards", "mjolnir": "Mjolnir with a lightning bolt"}
 
 
 def svg_shield(name, face):

@@ -16,8 +16,8 @@ import com.ozorhaar.yggdrasil.launcher.data.AppEntry
 import kotlin.math.abs
 
 /**
- * Renders every app as a round longship shield with its glyph "carved" in dark
- * iron. Apps that ship a monochrome (themed) icon get a clean carved glyph; the
+ * Renders every app as a round gold longship shield with its glyph "carved" in dark
+ * iron and a thin accent ring (frost, ember or bone). Apps that ship a monochrome (themed) icon get a clean carved glyph; the
  * rest get their own icon inlaid in the shield, toned down to match.
  */
 class ShieldIcons(
@@ -42,7 +42,8 @@ class ShieldIcons(
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = s / 2f
-        val fill = Glyphs.face(app) ?: SHIELDS[abs(app.packageName.hashCode()) % SHIELDS.size]
+        val fill = GOLD
+        val accent = Glyphs.accent(app) ?: ACCENTS[abs(app.packageName.hashCode()) % ACCENTS.size]
 
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         // shield face
@@ -54,9 +55,9 @@ class ShieldIcons(
         p.strokeWidth = s * 0.045f
         p.color = NIGHT
         c.drawCircle(cx, cx, s * 0.455f, p)
-        // inner groove
+        // accent ring in the inner groove
         p.strokeWidth = s * 0.022f
-        p.color = 0x2E000000
+        p.color = accent
         c.drawCircle(cx, cx, s * 0.375f, p)
 
         val icon: Drawable? = try {
@@ -97,12 +98,8 @@ class ShieldIcons(
     companion object {
         const val NIGHT = 0xFF0B1220.toInt()
         const val CARVE = 0xFF141A26.toInt()
-        val SHIELDS = intArrayOf(
-            0xFFC8A25A.toInt(), // gold
-            0xFF8FC4E0.toInt(), // frost
-            0xFFE0703A.toInt(), // ember
-            0xFFE8DCC4.toInt(), // bone
-            0xFFA67C4E.toInt(), // oak
-        )
+        const val GOLD = 0xFFC8A25A.toInt()
+        // accents only ever show as the thin ring, so every shield matches the dock's gold
+        val ACCENTS = intArrayOf(Glyphs.FROST, Glyphs.EMBER, Glyphs.BONE)
     }
 }

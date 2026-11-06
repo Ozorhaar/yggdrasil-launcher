@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yggdrasil glyph: Mjolnir with a lightning bolt (tools/glyphs.py) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:fillType="evenOdd" android:pathData="M38,36 L70,36 C71.6,36 72.6,37 72.6,38.6 L72.6,46.4 C72.6,48 71.6,49 70,49 L58,49 L58,70 C58,71.4 59.6,72 59.6,73.6 C59.6,75.4 58,77 54,77 C50,77 48.4,75.4 48.4,73.6 C48.4,72 50,71.4 50,70 L50,49 L38,49 C36.4,49 35.4,48 35.4,46.4 L35.4,38.6 C35.4,37 36.4,36 38,36 Z M56.4,38.4 L49.6,43.2 L53.4,43.6 L51.2,47.4 L58.6,41.8 L54.6,41.4 Z M50,56 L58,54.6 L58,56.2 L50,57.6 Z M50,61 L58,59.6 L58,61.2 L50,62.6 Z M50,66 L58,64.6 L58,66.2 L50,67.6 Z"/>
+</vector>
