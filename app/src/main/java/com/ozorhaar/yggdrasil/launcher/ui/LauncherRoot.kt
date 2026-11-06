@@ -1,5 +1,6 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
+import com.ozorhaar.yggdrasil.launcher.search.looselyHas
 import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -1129,7 +1130,7 @@ private fun AppDrawer(
     var query by remember { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
     val shown = remember(apps, query) {
-        if (query.isBlank()) apps else apps.filter { it.label.contains(query.trim(), ignoreCase = true) }
+        if (query.isBlank()) apps else apps.filter { it.label.looselyHas(query) }
     }
     val pullToClose = remember {
         object : NestedScrollConnection {

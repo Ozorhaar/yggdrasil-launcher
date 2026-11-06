@@ -1,5 +1,6 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
+import com.ozorhaar.yggdrasil.launcher.search.looselyHas
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
@@ -152,7 +153,7 @@ fun WidgetPicker(
     var query by remember { mutableStateOf("") }
     val shown = all?.let { list ->
         val q = query.trim()
-        if (q.isEmpty()) list else list.filter { it.app.contains(q, true) || it.label.contains(q, true) }
+        if (q.isEmpty()) list else list.filter { it.app.looselyHas(q) || it.label.looselyHas(q) }
     }
     Column(
         Modifier.fillMaxSize()

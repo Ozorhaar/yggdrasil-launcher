@@ -90,8 +90,8 @@ fun SearchOverlay(
 
     val appHits = remember(apps, q) {
         if (q.isEmpty()) emptyList()
-        else apps.filter { it.label.contains(q, ignoreCase = true) }
-            .sortedBy { if (it.label.startsWith(q, ignoreCase = true)) 0 else 1 }.take(8)
+        else apps.filter { it.label.looselyHas(q) }
+            .sortedBy { if (it.label.startsLike(q)) 0 else 1 }.take(8)
     }
     val sum = remember(q) { Calc.evaluate(q) }
     val settingHits = remember(q) { if (q.length < 2) emptyList() else SETTINGS.filter { s -> s.words.any { it.contains(q.lowercase()) } }.take(4) }
