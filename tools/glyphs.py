@@ -78,11 +78,38 @@ def stick(cx, cy, L, W, ang, notches):
 
 G["calculator"] = [(stick(54, 50, 40, 7, -18, 6), False), (stick(54, 63, 30, 5.4, -18, 4), False)]
 
-# Mail (Nine): a folded letter under a wax seal
-G["mail"] = [("M34,40 L74,40 L74,70 L34,70 Z M37.5,43 L54,56.2 L70.5,43 Z M37,67 L37,45.5 L50.5,56.4 Z "
-              "M71,67 L71,45.5 L57.5,56.4 Z M39.5,67 L52,57.6 L54,59.2 L56,57.6 L68.5,67 Z", True),
-             (circ(54, 59.5, 5.2), False)]
+# Mail (Nine): a rune-stick (runakefli), the letters Norse people actually carved and sent,
+# cut with runes and hung on a cord. Cuts never overlap: an overlap would fill back in under even-odd.
+def _runestick():
+    CX, CY, ANG, L, Wd = 54, 55, -38, 28, 9.2
 
+    def P(s, t):
+        a = math.radians(ANG); return (CX + math.cos(a) * s - math.sin(a) * t, CY + math.sin(a) * s + math.cos(a) * t)
+
+    def seg(s0, t0, s1, t1, w):
+        (x0, y0), (x1, y1) = P(s0, t0), P(s1, t1)
+        dx, dy = x1 - x0, y1 - y0; n = math.hypot(dx, dy); nx, ny = -dy / n * w / 2, dx / n * w / 2
+        return f"M{x0+nx:.2f},{y0+ny:.2f} L{x1+nx:.2f},{y1+ny:.2f} L{x1-nx:.2f},{y1-ny:.2f} L{x0-nx:.2f},{y0-ny:.2f} Z"
+
+    pts = [P(-L, -Wd), P(L - 2, -Wd), P(L, -Wd + 2), P(L, Wd - 2), P(L - 2, Wd), P(-L, Wd), P(-L - 1.4, 0)]
+    stick = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
+    h, w = 6.6, 1.9; e = w / 2
+    cuts = []
+    for kind, s in (("n", -17), ("i", -10.5), ("k", -4), ("l", 4.5)):
+        if kind == "n":    # ᚾ: staff, bar crossing it in two halves
+            cuts += [seg(s, -h, s, h, w), seg(s - 3.2, -2.4, s - e, -0.4, w), seg(s + e, 0.4, s + 3.2, 2.4, w)]
+        elif kind == "i":  # ᛁ
+            cuts += [seg(s, -h, s, h, w)]
+        elif kind == "k":  # ᚲ: an open angle
+            cuts += [seg(s + 2.6, -h + 0.6, s - 1.6, 0, w), seg(s - 1.0, 0.6, s + 2.6, h - 0.6, w)]
+        else:              # ᛚ: staff with a branch falling from its top
+            cuts += [seg(s, -h, s, h, w), seg(s + e, -h + 0.6, s + 3.6, -h + 4.6, w)]
+    hx, hy = P(22.6, 0)
+    cord = seg(22.6, -2.4, 33, -9, 1.8) + " " + seg(33, -9, 34.4, -3, 1.8)
+    return [(stick + " " + " ".join(cuts) + " " + circ(hx, hy, 2.3), True), (cord, False)]
+
+
+G["mail"] = _runestick()
 
 # Game (Monopoly Go): rolling the bones, two bone dice carved with ring-and-dot pips like Viking ones
 BONE_SHAPE = ("M -13,-3.8 L 13,-3.8 C 14,-8 18.6,-10 21.4,-7.4 C 23.4,-5.4 23,-2.4 21.2,-1 C 23,0.4 23.4,3.4 21.4,5.4 "
@@ -169,7 +196,7 @@ G["mjolnir"] = [("M38,36 L70,36 C71.6,36 72.6,37 72.6,38.6 L72.6,46.4 C72.6,48 7
 
 FACES = {n: "#C8A25A" for n in G}  # preview only: every shield is gold; Glyphs.kt holds each accent ring
 DESC = {"calendar": "a runestone carved with day-marks and a sun ring", "voicemail": "Gjallarhorn sounding",
-        "calculator": "crossed tally sticks", "mail": "a folded letter under a wax seal", "dice": "two bone dice, rolling the bones",
+        "calculator": "crossed tally sticks", "mail": "a rune-stick letter on a cord", "dice": "two bone dice, rolling the bones",
         "anvil": "the smith's anvil and hammer", "gallery": "a Gotland picture stone carved with a longship", "helm": "a spangenhelm, for Brave", "assist": "ansuz, the rune of speech, sounding", "longhouse": "a longhouse gable with crossed bargeboards", "mjolnir": "Mjolnir with a lightning bolt"}
 
 

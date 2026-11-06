@@ -46,17 +46,26 @@ fun HafnirGem(modifier: Modifier = Modifier) = DockGem(modifier) {
     drawLine(Ygg.Frost, Offset(cx, top + 6.dp.toPx()), Offset(cx + twig + 1.dp.toPx(), top + 6.dp.toPx() + twig - 1.dp.toPx()), w, StrokeCap.Square)
 }
 
-/** Launcher settings: three carved slider bars with gold notches. */
+/**
+ * Launcher settings: a vegvisir-style wayfinder stave in frost (eight staves around a hub, each
+ * ending in a crossbar), the old Norse sign for finding your way, carved like Bifrost's and Hafnir's marks.
+ */
 @Composable
 fun SettingsGem(modifier: Modifier = Modifier) = DockGem(modifier) {
-    val w = 1.8.dp.toPx()
-    val left = 4.dp.toPx()
-    val right = size.width - 4.dp.toPx()
-    val notches = listOf(0.30f, 0.68f, 0.45f)
-    listOf(0.18f, 0.5f, 0.82f).forEachIndexed { i, f ->
-        val y = size.height * f
-        drawLine(Ygg.Bone.copy(alpha = 0.75f), Offset(left, y), Offset(right, y), w, StrokeCap.Round)
-        val x = left + (right - left) * notches[i]
-        drawLine(Ygg.Gold, Offset(x, y - 2.6.dp.toPx()), Offset(x, y + 2.6.dp.toPx()), 2.6.dp.toPx(), StrokeCap.Round)
+    val c = Offset(size.width / 2, size.height / 2)
+    val w = 1.6.dp.toPx()
+    val hub = 2.4.dp.toPx()
+    val reach = size.height / 2 - 0.4.dp.toPx()
+    val bar = 1.7.dp.toPx()
+    drawCircle(Ygg.Frost, radius = hub, center = c, style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    for (i in 0 until 8) {
+        val a = Math.toRadians(i * 45.0 - 90.0)
+        val ux = kotlin.math.cos(a).toFloat(); val uy = kotlin.math.sin(a).toFloat()
+        val from = Offset(c.x + ux * (hub + w / 2), c.y + uy * (hub + w / 2))
+        val to = Offset(c.x + ux * reach, c.y + uy * reach)
+        drawLine(Ygg.Frost, from, to, w, StrokeCap.Round)
+        // the crossbar at each stave's end
+        val bx = -uy * bar; val by = ux * bar
+        drawLine(Ygg.Frost, Offset(to.x - bx, to.y - by), Offset(to.x + bx, to.y + by), w, StrokeCap.Round)
     }
 }
