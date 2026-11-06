@@ -126,6 +126,7 @@ import com.ozorhaar.yggdrasil.launcher.data.AppEntry
 import com.ozorhaar.yggdrasil.launcher.data.LayoutMode
 import com.ozorhaar.yggdrasil.launcher.data.LayoutStore
 import com.ozorhaar.yggdrasil.launcher.expandNotifications
+import com.ozorhaar.yggdrasil.launcher.icons.Glyphs
 import com.ozorhaar.yggdrasil.launcher.icons.ShieldIcons
 import com.ozorhaar.yggdrasil.launcher.openAssistant
 import com.ozorhaar.yggdrasil.launcher.openSettings
@@ -160,7 +161,7 @@ fun LauncherRoot() {
     val density = LocalDensity.current
     val icons = remember {
         val dpi = ctx.resources.displayMetrics.densityDpi
-        ShieldIcons(with(density) { 64.dp.roundToPx() }) { ygg.repo.iconFor(it, dpi) }
+        ShieldIcons(with(density) { 64.dp.roundToPx() }, { pkg -> Glyphs.drawable(ctx, pkg) }) { ygg.repo.iconFor(it, dpi) }
     }
     val haptic = LocalHapticFeedback.current
     val topZonePx = WindowInsets.statusBars.getTop(density) + with(density) { 56.dp.toPx() }

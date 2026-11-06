@@ -20,7 +20,11 @@ import kotlin.math.abs
  * iron. Apps that ship a monochrome (themed) icon get a clean carved glyph; the
  * rest get their own icon inlaid in the shield, toned down to match.
  */
-class ShieldIcons(private val sizePx: Int, private val iconOf: (AppEntry) -> Drawable?) {
+class ShieldIcons(
+    private val sizePx: Int,
+    private val glyphOf: (String) -> Drawable? = { null },
+    private val iconOf: (AppEntry) -> Drawable?,
+) {
 
     private val cache = LruCache<String, ImageBitmap>(400)
 
@@ -38,7 +42,7 @@ class ShieldIcons(private val sizePx: Int, private val iconOf: (AppEntry) -> Dra
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = s / 2f
-        val fill = SHIELDS[abs(app.packageName.hashCode()) % SHIELDS.size]
+        val fill = Glyphs.face(app.packageName) ?: SHIELDS[abs(app.packageName.hashCode()) % SHIELDS.size]
 
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         // shield face
@@ -60,7 +64,9 @@ class ShieldIcons(private val sizePx: Int, private val iconOf: (AppEntry) -> Dra
         } catch (_: Exception) {
             null
         }
-        val mono = if (Build.VERSION.SDK_INT >= 33 && icon is AdaptiveIconDrawable) icon.monochrome else null
+        // a Yggdrasil glyph for this app wins over its own monochrome layer
+        val glyph = if (app.isShortcut) null else try { glyphOf(app.packageName) } catch (_: Exception) { null }
+        val mono = glyph ?: if (Build.VERSION.SDK_INT >= 33 && icon is AdaptiveIconDrawable) icon.monochrome else null
 
         if (mono != null) {
             val m = mono.mutate()
