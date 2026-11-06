@@ -10,6 +10,7 @@ icons/Glyphs.kt says which app gets which glyph and which shield face.
 """
 import math
 import os
+import re
 
 
 def circ(cx, cy, r): return f"M{cx-r:.2f},{cy:.2f} A{r},{r} 0 1 0 {cx+r:.2f},{cy:.2f} A{r},{r} 0 1 0 {cx-r:.2f},{cy:.2f} Z"
@@ -83,22 +84,34 @@ G["mail"] = [("M34,40 L74,40 L74,70 L34,70 Z M37.5,43 L54,56.2 L70.5,43 Z M37,67
              (circ(54, 59.5, 5.2), False)]
 
 
-# Game (Monopoly Go): two carved dice, pips cut through
-def die(cx, cy, s, ang, pips):
-    a = math.radians(ang); ux, uy = math.cos(a), math.sin(a); vx, vy = -uy, ux
-    P = lambda x, y: (cx + ux * x + vx * y, cy + uy * x + vy * y)
-    r = 3.2; h = s / 2; pts = []
-    for (x, y, a0) in [(h - r, -h + r, -90), (h - r, h - r, 0), (-h + r, h - r, 90), (-h + r, -h + r, 180)]:
-        for k in range(7):
-            t = math.radians(a0 + 15 * k); pts.append(P(x + r * math.cos(t), y + r * math.sin(t)))
-    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in pts) + " Z"
-    for (x, y) in pips:
-        px, py = P(x * s * 0.27, y * s * 0.27); d += " " + circ(px, py, s * 0.075)
+# Game (Monopoly Go): rolling the bones, two bone dice carved with ring-and-dot pips like Viking ones
+BONE_SHAPE = ("M -13,-3.8 L 13,-3.8 C 14,-8 18.6,-10 21.4,-7.4 C 23.4,-5.4 23,-2.4 21.2,-1 C 23,0.4 23.4,3.4 21.4,5.4 "
+              "C 18.6,8 14,6 13,3.8 L -13,3.8 C -14,6 -18.6,8 -21.4,5.4 C -23.4,3.4 -23,0.4 -21.2,-1 C -23,-2.4 -23.4,-5.4 -21.4,-7.4 "
+              "C -18.6,-10 -14,-8 -13,-3.8 Z")
+
+
+def placed(d, cx, cy, s, ang):
+    a = math.radians(ang); c, si = math.cos(a), math.sin(a); out = []; nums = []
+    for t in re.findall(r'[A-Za-z]|-?\d+\.?\d*', d):
+        if t.isalpha():
+            out.append(t)
+        else:
+            nums.append(float(t))
+            if len(nums) == 2:
+                x, y = nums; out.append(f"{cx + s * (x * c - y * si):.2f},{cy + s * (x * si + y * c):.2f}"); nums = []
+    return " ".join(out)
+
+
+def bone(cx, cy, s, ang, n):
+    d = placed(BONE_SHAPE, cx, cy, s, ang); a = math.radians(ang)
+    for i in range(n):  # a ring cut into the bone, its centre left standing
+        x = (i - (n - 1) / 2) * 7.2
+        px, py = cx + s * x * math.cos(a), cy + s * x * math.sin(a)
+        d += " " + circ(px, py, s * 2.3) + " " + circ(px, py, s * 0.85)
     return d
 
 
-G["dice"] = [(die(46, 58, 22, -14, [(-1, -1), (0, 0), (1, 1)]), True),
-             (die(64, 46, 18, 12, [(-1, -1), (1, -1), (0, 0), (-1, 1), (1, 1)]), True)]
+G["dice"] = [(bone(51, 63, 0.92, -14, 3), True), (bone(57, 44, 0.82, 12, 2), True)]
 
 # 3D printer (Bambu Handy): the smith's anvil and hammer
 G["anvil"] = [("M30,52 L66,52 C70,52 76,50 80,47 C78,53 72,57 66,57.5 L61,58 C59,60 58.5,63 59.5,66 L64,66 L64,71 "
@@ -112,7 +125,7 @@ G["gallery"] = [(rect(33, 36, 75, 72) + " " + rect(36.6, 39.6, 71.4, 68.4), True
 FACES = {"calendar": "#E8DCC4", "voicemail": "#A67C4E", "calculator": "#E8DCC4", "mail": "#8FC4E0",
          "dice": "#E0703A", "anvil": "#A67C4E", "gallery": "#8FC4E0"}  # preview only; Glyphs.kt holds the real ones
 DESC = {"calendar": "a runestone carved with day-marks and a sun ring", "voicemail": "Gjallarhorn sounding",
-        "calculator": "crossed tally sticks", "mail": "a folded letter under a wax seal", "dice": "two carved dice",
+        "calculator": "crossed tally sticks", "mail": "a folded letter under a wax seal", "dice": "two bone dice, rolling the bones",
         "anvil": "the smith's anvil and hammer", "gallery": "a framed fjord at dusk"}
 
 
