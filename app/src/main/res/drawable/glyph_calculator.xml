@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yggdrasil glyph: crossed tally sticks (tools/glyphs.py) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M33.90,52.85 L37.81,51.58 L40.14,53.56 L40.85,50.59 L43.24,49.81 L45.57,51.79 L46.29,48.83 L48.68,48.05 L51.00,50.03 L51.72,47.06 L54.11,46.28 L56.44,48.26 L57.16,45.29 L59.55,44.52 L61.87,46.50 L62.59,43.53 L64.98,42.75 L67.31,44.73 L68.03,41.76 L71.94,40.49 L74.92,43.20 L74.10,47.15 L36.06,59.51 L33.08,56.80 Z"/>
+    <path android:fillColor="#FFFFFFFF" android:pathData="M38.90,65.07 L43.08,63.71 L45.41,65.69 L46.13,62.72 L48.79,61.85 L51.12,63.83 L51.83,60.86 L54.50,60.00 L56.82,61.98 L57.54,59.01 L60.20,58.15 L62.53,60.12 L63.25,57.16 L67.43,55.80 L70.17,57.75 L69.10,60.93 L40.57,70.20 L37.83,68.25 Z"/>
+</vector>

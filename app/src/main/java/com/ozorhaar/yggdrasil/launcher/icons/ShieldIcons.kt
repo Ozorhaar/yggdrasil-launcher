@@ -22,7 +22,7 @@ import kotlin.math.abs
  */
 class ShieldIcons(
     private val sizePx: Int,
-    private val glyphOf: (String) -> Drawable? = { null },
+    private val glyphOf: (AppEntry) -> Drawable? = { null },
     private val iconOf: (AppEntry) -> Drawable?,
 ) {
 
@@ -42,7 +42,7 @@ class ShieldIcons(
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = s / 2f
-        val fill = Glyphs.face(app.packageName) ?: SHIELDS[abs(app.packageName.hashCode()) % SHIELDS.size]
+        val fill = Glyphs.face(app) ?: SHIELDS[abs(app.packageName.hashCode()) % SHIELDS.size]
 
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         // shield face
@@ -65,7 +65,7 @@ class ShieldIcons(
             null
         }
         // a Yggdrasil glyph for this app wins over its own monochrome layer
-        val glyph = if (app.isShortcut) null else try { glyphOf(app.packageName) } catch (_: Exception) { null }
+        val glyph = try { glyphOf(app) } catch (_: Exception) { null }
         val mono = glyph ?: if (Build.VERSION.SDK_INT >= 33 && icon is AdaptiveIconDrawable) icon.monochrome else null
 
         if (mono != null) {

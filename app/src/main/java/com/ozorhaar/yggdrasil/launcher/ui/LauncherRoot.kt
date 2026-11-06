@@ -161,7 +161,7 @@ fun LauncherRoot() {
     val density = LocalDensity.current
     val icons = remember {
         val dpi = ctx.resources.displayMetrics.densityDpi
-        ShieldIcons(with(density) { 64.dp.roundToPx() }, { pkg -> Glyphs.drawable(ctx, pkg) }) { ygg.repo.iconFor(it, dpi) }
+        ShieldIcons(with(density) { 64.dp.roundToPx() }, { app -> Glyphs.drawable(ctx, app) }) { ygg.repo.iconFor(it, dpi) }
     }
     val haptic = LocalHapticFeedback.current
     val topZonePx = WindowInsets.statusBars.getTop(density) + with(density) { 56.dp.toPx() }
