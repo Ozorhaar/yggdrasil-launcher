@@ -1,6 +1,8 @@
 package com.ozorhaar.yggdrasil.launcher.wallpaper
 
+import android.app.WallpaperColors
 import android.graphics.Canvas
+import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -14,6 +16,10 @@ import kotlin.concurrent.thread
  * second when something moves (northern lights, rain, snow, storm), otherwise
  * once a minute so the sky can follow the time of day. Weather every 30 minutes.
  */
+private const val GOLD = 0xFFC8A25A.toInt()
+private const val FROST = 0xFF8FC4E0.toInt()
+private const val NIGHT = 0xFF0B1220.toInt()
+
 class FjordWallpaper : WallpaperService() {
 
     override fun onCreateEngine(): Engine = FjordEngine()
@@ -44,7 +50,18 @@ class FjordWallpaper : WallpaperService() {
                 if (System.currentTimeMillis() - start < DEMO_SECONDS * 1000) sc.demoStart = start
             }
             prefs.registerOnSharedPreferenceChangeListener(demoListener)
+            notifyColorsChanged()
         }
+
+        /**
+         * The colours Android builds its palette from (Samsung's "Color palette", Material You).
+         * Reporting Yggdrasil gold, frost and night, with a dark-theme hint, lets apps that follow
+         * the palette, Google Messages among them, take on the Yggdrasil look.
+         */
+        override fun onComputeColors(): WallpaperColors = WallpaperColors(
+            Color.valueOf(GOLD), Color.valueOf(FROST), Color.valueOf(NIGHT),
+            WallpaperColors.HINT_SUPPORTS_DARK_THEME,
+        )
 
         override fun onVisibilityChanged(v: Boolean) {
             visible = v
