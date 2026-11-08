@@ -7,9 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -102,49 +100,63 @@ fun gateTap(ctx: Context, scope: CoroutineScope, gates: GateStates, g: Gate) {
     }
 }
 
-/** The side door's mark: a padlock, frost when locked, ember and open when unlocked. */
+/** The side door's mark: an arched plank door, barred across when locked; unbarred, ring showing, when not. */
 @Composable
 fun SideDoorGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifier) {
     val c = gateColor(state)
     val w = size.width; val h = size.height
-    val bw = h * 0.78f; val bh = h * 0.52f
-    val left = w / 2 - bw / 2; val top = h - bh
-    drawRoundRect(c, Offset(left, top), Size(bw, bh), CornerRadius(h * 0.08f))
-    drawCircle(Ygg.Night, h * 0.08f, Offset(w / 2, top + bh * 0.45f))
-    val sw = 1.6.dp.toPx()
-    val r = bw * 0.3f
-    // the shackle: seated when locked, lifted and swung aside when unlocked
-    val lift = if (isOpen(state)) h * 0.16f else 0f
-    val cx = if (isOpen(state)) w / 2 + r * 0.5f else w / 2
-    val p = Path().apply {
-        moveTo(cx - r, top - lift + (if (isOpen(state)) -h * 0.02f else 0f) + 0.5f)
-        lineTo(cx - r, top - r * 0.7f - lift)
-        arcTo(androidx.compose.ui.geometry.Rect(cx - r, top - r * 1.7f - lift, cx + r, top + r * 0.3f - lift), 180f, 180f, false)
-        lineTo(cx + r, top - lift + 0.5f)
+    val sw = 1.4.dp.toPx()
+    val dw = h * 0.62f; val l = w / 2 - dw / 2; val r = w / 2 + dw / 2; val top = h * 0.06f; val ar = dw / 2
+    val door = Path().apply {
+        moveTo(l, h); lineTo(l, top + ar)
+        arcTo(androidx.compose.ui.geometry.Rect(l, top, r, top + dw), 180f, 180f, false)
+        lineTo(r, h); close()
     }
-    drawPath(p, c, style = Stroke(sw, cap = StrokeCap.Round))
+    drawPath(door, c, style = Stroke(sw))
+    for (f in listOf(1f / 3f, 2f / 3f)) {
+        val x = l + dw * f
+        drawLine(c, Offset(x, top + ar * 0.35f), Offset(x, h), sw * 0.6f)
+    }
+    if (isOpen(state)) {
+        // unbarred: just the iron ring
+        drawCircle(c, h * 0.09f, Offset(r - dw * 0.18f, h * 0.62f), style = Stroke(sw * 0.7f))
+    } else {
+        // the beam across the door, in its two brackets
+        val y = h * 0.58f
+        drawLine(c, Offset(l - h * 0.28f, y), Offset(r + h * 0.28f, y), sw * 1.5f, StrokeCap.Round)
+        for (x in listOf(l - h * 0.12f, r + h * 0.12f))
+            drawLine(c, Offset(x, y - h * 0.14f), Offset(x, y + h * 0.14f), sw * 0.8f, StrokeCap.Round)
+    }
 }
 
-/** The garage's mark: the door in its frame, frost when closed, ember and raised when open. */
+/** The garage's mark: a boathouse (naust) with a horned gable; plank doors when closed, a dragon prow when open. */
 @Composable
 fun GarageGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifier) {
     val c = gateColor(state)
     val w = size.width; val h = size.height
-    val sw = 1.5.dp.toPx()
-    val half = h * 0.62f
-    val l = w / 2 - half; val r = w / 2 + half
-    val eave = h * 0.36f
-    // roof and walls
-    val house = Path().apply {
-        moveTo(l, h); lineTo(l, eave); lineTo(w / 2, 0.5f); lineTo(r, eave); lineTo(r, h)
-    }
-    drawPath(house, c, style = Stroke(sw, cap = StrokeCap.Round))
-    // the door's slats: all four when closed, one tucked up top when open
-    val slats = if (isOpen(state) || state == "opening") 1 else 4
-    val dl = l + h * 0.16f; val dr = r - h * 0.16f
-    for (i in 0 until slats) {
-        val y = eave + h * 0.1f + i * h * 0.14f
-        drawLine(c, Offset(dl, y), Offset(dr, y), sw, StrokeCap.Round)
+    val sw = 1.4.dp.toPx()
+    val half = h * 0.62f; val l = w / 2 - half; val r = w / 2 + half
+    val eave = h * 0.42f; val peak = h * 0.12f
+    val house = Path().apply { moveTo(l, h); lineTo(l, eave); lineTo(w / 2, peak); lineTo(r, eave); lineTo(r, h) }
+    drawPath(house, c, style = Stroke(sw, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    // crossed bargeboards at the peak
+    drawLine(c, Offset(w / 2 - h * 0.16f, peak + h * 0.1f), Offset(w / 2 + h * 0.12f, -h * 0.06f), sw, StrokeCap.Round)
+    drawLine(c, Offset(w / 2 + h * 0.16f, peak + h * 0.1f), Offset(w / 2 - h * 0.12f, -h * 0.06f), sw, StrokeCap.Round)
+    val dl = l + h * 0.18f; val dr = r - h * 0.18f; val dt = eave + h * 0.06f
+    if (isOpen(state) || state == "opening") {
+        drawLine(c, Offset(dl, dt), Offset(dr, dt), sw * 0.9f, StrokeCap.Round)
+        val px = w / 2 - h * 0.05f
+        val prow = Path().apply {
+            moveTo(px, h); lineTo(px, h * 0.66f)
+            cubicTo(px, h * 0.54f, px + h * 0.2f, h * 0.52f, px + h * 0.2f, h * 0.64f)
+            cubicTo(px + h * 0.2f, h * 0.72f, px + h * 0.09f, h * 0.72f, px + h * 0.09f, h * 0.66f)
+        }
+        drawPath(prow, c, style = Stroke(sw * 0.9f, cap = StrokeCap.Round))
+    } else {
+        for (i in 0 until 5) {
+            val x = dl + (dr - dl) * i / 4f
+            drawLine(c, Offset(x, dt), Offset(x, h), sw * 0.75f, StrokeCap.Round)
+        }
     }
 }
 
