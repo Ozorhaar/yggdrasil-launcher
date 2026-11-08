@@ -101,8 +101,9 @@ fun SkyCardView() {
             val t = DateFormat.getTimeInstance(DateFormat.SHORT)
             val sun = if (System.currentTimeMillis() < n.sunset) "Sunset ${t.format(Date(n.sunset))}" else "Sunrise ${t.format(Date(n.sunrise + 24 * 3600 * 1000L))}"
             Text(
-                "${n.words} · $sun", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                "${n.words} · $sun", maxLines = 1,
                 style = TextStyle(color = Ygg.Bone, fontSize = 13.sp, fontFamily = Ygg.Runic),
+                modifier = Modifier.rollIfLong(),
             )
         }
     }

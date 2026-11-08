@@ -201,8 +201,9 @@ fun NornsCardView() {
                         )
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            t.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            t.title, maxLines = 1,
                             style = TextStyle(color = if (i == 0) Ygg.Bone else Ygg.Ash, fontSize = if (i == 0) 14.sp else 12.sp, fontFamily = Ygg.Runic),
+                            modifier = Modifier.weight(1f).rollIfLong(),
                         )
                     }
                 }
@@ -213,8 +214,9 @@ fun NornsCardView() {
 
 @Composable
 private fun Line(text: String, color: androidx.compose.ui.graphics.Color, size: Int) = Text(
-    text, maxLines = 1, overflow = TextOverflow.Ellipsis,
+    text, maxLines = 1,
     style = TextStyle(color = color, fontSize = size.sp, fontFamily = Ygg.Runic),
+    modifier = Modifier.rollIfLong(),
 )
 
 /** Opens the event in Nine (or whatever handles calendar events), else Nine's calendar. */
