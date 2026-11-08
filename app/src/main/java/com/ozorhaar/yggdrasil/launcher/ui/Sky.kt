@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
@@ -122,8 +123,11 @@ private fun DrawScope.drawSky(sky: Weather.Sky, day: Boolean) {
         }
     }
     fun moon(c: Offset, r: Float) {
-        drawCircle(Ygg.Bone, r, c)
-        drawCircle(Ygg.Iron, r * 0.86f, Offset(c.x + r * 0.45f, c.y - r * 0.2f))
+        // the real phase tonight: the dark face faintly, the lit part in bone
+        val age = com.ozorhaar.yggdrasil.launcher.wallpaper.Moon.age()
+        drawCircle(Ygg.Bone.copy(alpha = 0.14f), r, c)
+        drawCircle(Ygg.Bone.copy(alpha = 0.35f), r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(w * 0.012f))
+        drawPath(com.ozorhaar.yggdrasil.launcher.wallpaper.Moon.litPath(c.x, c.y, r, age).asComposePath(), Ygg.Bone)
     }
     fun cloud(y: Float, color: Color = Ygg.Bone) {
         drawCircle(color, w * 0.17f, Offset(w * 0.36f, y))

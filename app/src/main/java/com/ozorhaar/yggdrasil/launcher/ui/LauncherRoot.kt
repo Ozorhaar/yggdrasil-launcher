@@ -186,6 +186,8 @@ fun LauncherRoot() {
     val gates = rememberGates()
     val homeLinkReady = ygg.homeLink.configured
     var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate?>(null) }
+    /** Where the raven sits on the longhouse roof (null while it isn't there). */
+    var ravenRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     DuskClock()
     LaunchedEffect(Unit) { Carved.warm(ctx) }
     val bridge by rememberBridge()
@@ -459,6 +461,8 @@ fun LauncherRoot() {
                     drag.ownedGesture = false
                     if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null || peekGate != null)
                         return@awaitEachGesture
+                    // a tap on the raven is the raven's, not the icon's under it
+                    if (openFolder == null && ravenRect?.contains(down.position) == true) return@awaitEachGesture
                     val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
                     val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)
                     val item = loc?.let { layout.itemAt(it) }
@@ -508,6 +512,13 @@ fun LauncherRoot() {
                 detectTapGestures(
                     // a tap on the dock's rune band (not an icon) wakes Hafnir
                     onTap = { p ->
+                        // the raven on the roof: look through the camera at whoever it's watching
+                        val raven = gates.watching()
+                        if (raven != null && openFolder == null && ravenRect?.contains(p) == true) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            peekGate = raven
+                            return@detectTapGestures
+                        }
                         // the marks on the band: settings (left), Hafnir (right)
                         if (hafnirGemRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -609,6 +620,16 @@ fun LauncherRoot() {
                 )
             )
         }
+        // the raven on the longhouse roof, under the icons
+        if (homeLinkReady) RavenWatch(
+            watching = gates.watching(),
+            wallX = {
+                val n = layout.pages.size
+                if (n > 1 && layout.layoutMode == LayoutMode.GRID)
+                    ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+            },
+            onPerch = { ravenRect = it },
+        )
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (layout.layoutMode) {

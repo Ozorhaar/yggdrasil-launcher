@@ -13,7 +13,7 @@ import kotlin.concurrent.thread
 
 /**
  * The living fjord wallpaper. It only draws while it can be seen: ~15 frames a
- * second when something moves (northern lights, rain, snow, storm), otherwise
+ * second when something moves (northern lights, rain, snow, storm; ~8 for hearth smoke), otherwise
  * once a minute so the sky can follow the time of day. Weather every 30 minutes.
  */
 private const val GOLD = 0xFFC8A25A.toInt()
@@ -142,7 +142,7 @@ class FjordWallpaper : WallpaperService() {
             }
             refreshWeather()
             refreshHouse()
-            handler.postDelayed(tick, if (sc.animating) 66L else 60_000L)
+            handler.postDelayed(tick, sc.frameMs)
         }
     }
 }

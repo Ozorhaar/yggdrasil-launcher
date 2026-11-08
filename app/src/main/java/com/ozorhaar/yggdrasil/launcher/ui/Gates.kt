@@ -50,6 +50,12 @@ class GateStates {
 
     fun of(g: Gate): String? = state[g]
 
+    /** Doors where Frigate sees someone right now (the raven on the roof). */
+    val seen = mutableStateMapOf<Gate, Boolean>()
+
+    /** The door the raven watches: the side door first, then the driveway; null when no one's about. */
+    fun watching(): Gate? = Gate.entries.firstOrNull { seen[it] == true }
+
     fun put(g: Gate, s: String) {
         if (state[g] != s) since[g] = System.currentTimeMillis()
         state[g] = s
@@ -76,7 +82,16 @@ private fun Context.readGates(into: GateStates) {
     into.readAt = System.currentTimeMillis()
 }
 
-/** The doors' states, read when the home screen shows and every 30 seconds while it does. */
+private fun Context.readWatchers(into: GateStates) {
+    val link = ygg.homeLink
+    if (!link.configured) return
+    Gate.entries.forEach { g -> runCatching { link.seen(g) }.getOrNull()?.let { into.seen[g] = it } }
+}
+
+/**
+ * The doors' states, read when the home screen shows and every 30 seconds while it does; and
+ * Frigate's person sensors at those doors every 6 seconds, for the raven.
+ */
 @Composable
 fun rememberGates(): GateStates {
     val ctx = LocalContext.current
@@ -84,6 +99,12 @@ fun rememberGates(): GateStates {
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(owner) {
         owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            launch {
+                while (true) {
+                    withContext(Dispatchers.IO) { ctx.readWatchers(gates) }
+                    delay(6_000L)
+                }
+            }
             while (true) {
                 withContext(Dispatchers.IO) { ctx.readGates(gates) }
                 delay(30_000L)

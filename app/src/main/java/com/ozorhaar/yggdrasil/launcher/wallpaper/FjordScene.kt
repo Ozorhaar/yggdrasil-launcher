@@ -2,6 +2,7 @@ package com.ozorhaar.yggdrasil.launcher.wallpaper
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BlendMode
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
@@ -23,6 +24,7 @@ import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -37,24 +39,65 @@ const val DEMO_PREF = "fjord_demo_start"
 private const val SHELF_Y = 68
 private const val SHELF_FROM = 1040
 private const val SHELF_FULL = 1112
+/** The longhouse's ends, in the art's coordinates. */
+private const val HALL_L = 1118f
+private const val HALL_R = 1402f
+/** The sail on the longship bitmap (its own pixels). */
+private const val SAIL_L = 448; private const val SAIL_T = 40; private const val SAIL_R = 766; private const val SAIL_B = 284
+/** Solar output (W) at which the sail burns brightest. */
+private const val SOLAR_FULL_W = 7000f
 
 class FjordScene(ctx: Context) {
+
+    companion object {
+        /**
+         * Where a raven perches on the longhouse's ridge (towards its left end, clear of the smoke
+         * hole), in screen pixels for a w x h screen, plus the art's scale. Must match drawSteading.
+         */
+        fun ridgePerch(w: Int, h: Int, xOffset: Float): Triple<Float, Float, Float> {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val landX = ox - 1440 * s * 0.02f + par
+            val landTop = oy + 1327 * s
+            val ridge = landTop + 68 * s + 0.5f * s - 100 * s
+            val l = landX + HALL_L * 1.04f * s; val r = landX + HALL_R * 1.04f * s
+            return Triple(l + 40 * s + (r - l - 80 * s) * 0.18f, ridge, s)
+        }
+    }
+
+    private val prefs = ctx.applicationContext.getSharedPreferences("weather", Context.MODE_PRIVATE)
+    /** When snow was last seen falling (it then lies on the roofs while it stays at freezing). */
+    private var snowAt = prefs.getLong("snow_at", 0L)
 
     var weather: Weather.Now? = Weather.cached(ctx)
 
     /** What the house is doing, from Home Assistant (null = unknown: the steading is drawn dark). */
-    data class House(val lightsOn: Boolean, val garageOpen: Boolean, val doorUnlocked: Boolean)
+    data class House(
+        val lightsOn: Boolean,
+        val garageOpen: Boolean,
+        val doorUnlocked: Boolean,
+        /** Jason or Leah is home: the hearth burns and smoke rises from the roof. */
+        val hearth: Boolean = false,
+        /** What the solar panels are making, in watts: the longship's sail glows with it. */
+        val solarW: Float = 0f,
+    )
     var house: House? = null
 
     /** Set to start the ~80 s demo that runs through a day and every kind of weather. 0 = off. */
     var demoStart = 0L
 
-    /** True while something moves (northern lights, rain, snow, storm): the engine then draws ~15 fps. */
+    /** True while something moves (northern lights, rain, snow, storm, hearth smoke). */
     var animating = false
+        private set
+
+    /** How long until the next frame: ~15 fps for weather and lights, ~8 fps for smoke alone, else a minute. */
+    var frameMs = 60_000L
         private set
 
     private val land: Bitmap = levelHilltop(decode(ctx, R.drawable.fjord_land))
     private val ship: Bitmap = decode(ctx, R.drawable.fjord_ship)
+    private val sail: Bitmap? = sailMask(ship)
     private val ray: Bitmap = auroraRay()
     private val puff: Bitmap = cloudPuff()
 
@@ -153,6 +196,17 @@ class FjordScene(ctx: Context) {
             Weather.Sky.SNOW -> 0.75f; Weather.Sky.THUNDER -> 0.9f
         }
         val p = skyAt(now)
+        // the demo also shows the steading at its liveliest: hearth lit, sail full of sun by day
+        val realHouse = house
+        if (demo != null) house = (realHouse ?: House(false, false, false)).copy(
+            lightsOn = true, hearth = true, solarW = if (p.dark < 0.4f) SOLAR_FULL_W else 0f,
+        )
+        if (demo == null && skyKind == Weather.Sky.SNOW && realNow - snowAt > 10 * 60_000L) {
+            snowAt = realNow; prefs.edit().putLong("snow_at", snowAt).apply()
+        }
+        // snow lies on the steading while it falls, and for a day and a half after while it stays at freezing
+        val snowCover = skyKind == Weather.Sky.SNOW ||
+            (demo == null && realNow - snowAt < 36 * 3600_000L && (wx?.tempF ?: 99) <= 33)
         val light = 1f - p.dark
         val grey = mix(0xFF2A2E36.toInt(), 0xFF8A919C.toInt(), light)
         val top = mix(p.top, grey, cloud * 0.8f)
@@ -185,13 +239,17 @@ class FjordScene(ctx: Context) {
         }
 
         // moon / sun
-        val moonA = (p.dark - 0.5f).coerceAtLeast(0f) * 2 * (1 - cloud)
+        val moonAge = Moon.age(now)
+        val moonLit = Moon.lit(moonAge)
+        val moonA = (p.dark - 0.5f).coerceAtLeast(0f) * 2 * (1 - cloud) * (0.25f + 0.75f * moonLit)
         if (moonA > 0.02f) {
+            // tonight's real phase: a glow that grows with it, the dark face faintly, the lit part bright
             val mx = w * 0.78f + skyPar; val my = h * 0.13f; val r = 34 * s * 1.6f
-            paint.shader = RadialGradient(mx, my, r * 5, intArrayOf(argb(0.35f * moonA, 0xFFE8F0FF.toInt()), 0), null, Shader.TileMode.CLAMP)
+            paint.shader = RadialGradient(mx, my, r * 5, intArrayOf(argb(0.35f * moonA * moonLit, 0xFFE8F0FF.toInt()), 0), null, Shader.TileMode.CLAMP)
             c.drawCircle(mx, my, r * 5, paint); paint.shader = null
-            paint.color = argb(0.9f * moonA, 0xFFEDEFF5.toInt()); c.drawCircle(mx, my, r, paint)
-            paint.color = argb(0.85f * moonA, top); c.drawCircle(mx + r * 0.45f, my - r * 0.15f, r * 0.92f, paint) // crescent
+            paint.color = argb(0.85f * moonA, mix(top, 0xFF2A3348.toInt(), 0.5f)); c.drawCircle(mx, my, r, paint)
+            paint.color = argb(0.92f * moonA, 0xFFEDEFF5.toInt())
+            c.drawPath(Moon.litPath(mx, my, r, moonAge), paint)
         }
         val sunA = light * (1 - p.glow) * (1 - cloud) * 0.6f
         if (sunA > 0.02f) {
@@ -294,14 +352,32 @@ class FjordScene(ctx: Context) {
         c.drawBitmap(land, null, rect, paint)
 
         // the steading on the right-hand hill: a longhouse that follows the house (see drawSteading)
-        drawSteading(c, landX, landTop, s, light, p.dark, landFilter)
+        drawSteading(c, landX, landTop, s, light, p.dark, snowCover, t)
 
         // longship, its reflection and the ripples
         val sl = lerp(1.15f, 0.65f, p.dark)
+        val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
+        val sun = sqrt(((house?.solarW ?: 0f) / SOLAR_FULL_W).coerceIn(0f, 1f))
+        val sailRect = RectF(shipL + SAIL_L * 1.04f * s, shipT + SAIL_T * s, shipL + SAIL_R * 1.04f * s, shipT + SAIL_B * s)
+        if (sun > 0.02f) {
+            // the panels' power, caught in the sail: a warm halo behind it...
+            val r = sailRect.height() * 1.1f
+            paint.shader = RadialGradient(sailRect.centerX(), sailRect.centerY(), r, intArrayOf(argb(0.32f * sun, 0xFFECD08F.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(sailRect.centerX(), sailRect.centerY(), r, paint); paint.shader = null
+        }
         paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
-        rect.set(ox + 13 * s * 1.04f - 1440 * s * 0.02f + par, oy + 1598 * s, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
+        rect.set(shipL, shipT, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
         c.drawBitmap(ship, null, rect, paint)
         paint.colorFilter = null
+        val sm = sail
+        if (sun > 0.02f && sm != null) {
+            // ...and gold light in the cloth itself
+            paint.colorFilter = PorterDuffColorFilter(0xFFECD08F.toInt(), PorterDuff.Mode.SRC_IN)
+            paint.blendMode = BlendMode.PLUS
+            paint.alpha = (150 * sun).toInt()
+            c.drawBitmap(sm, null, sailRect, paint)
+            paint.blendMode = null; paint.colorFilter = null; paint.alpha = 255
+        }
 
         // rain / snow
         val precip = when (skyKind) {
@@ -310,6 +386,14 @@ class FjordScene(ctx: Context) {
         if (precip > 0) drawPrecip(c, w, h, dt, t, precip, skyKind == Weather.Sky.SNOW, light)
 
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
+        val smoke = house?.hearth == true
+        frameMs = when {
+            animating -> 66L
+            smoke -> 125L
+            else -> 60_000L
+        }
+        animating = animating || smoke
+        house = realHouse
     }
 
 
@@ -320,7 +404,7 @@ class FjordScene(ctx: Context) {
      * a post at its end burns while the garage is open. Positions are in the mountain art's own
      * coordinates, so it moves with the hills.
      */
-    private fun drawSteading(c: Canvas, landX: Float, landTop: Float, s: Float, light: Float, dark: Float, landFilter: ColorMatrixColorFilter) {
+    private fun drawSteading(c: Canvas, landX: Float, landTop: Float, s: Float, light: Float, dark: Float, snow: Boolean, t: Float) {
         val h = house
         val k = 1.04f * s
         fun x(a: Float) = landX + a * k
@@ -333,7 +417,7 @@ class FjordScene(ctx: Context) {
         val roof = mix(0xFF0B0E15.toInt(), 0xFF3A3638.toInt(), light)
 
         // the longhouse: low walls under a deep, curved turf roof, crossed gable boards at both ends
-        val l = x(1118f); val r = x(1402f); val wallTop = base - 40 * s; val ridge = base - 100 * s
+        val l = x(HALL_L); val r = x(HALL_R); val wallTop = base - 40 * s; val ridge = base - 100 * s
         paint.color = wall; c.drawRect(l, wallTop, r, base, paint)
         path.reset()
         path.moveTo(l - 16 * s, wallTop + 4 * s)
@@ -379,6 +463,46 @@ class FjordScene(ctx: Context) {
             paint.color = 0xFFECD08F.toInt(); c.drawCircle(px, ly, 4.5f * s, paint)
         } else {
             paint.color = roof; c.drawCircle(px, base - 48 * s, 4f * s, paint)
+        }
+
+        // snow on the turf roof and the shelf it stands on
+        if (snow) {
+            val white = mix(0xFF8A93A6.toInt(), 0xFFEEF2F8.toInt(), light * 0.8f + 0.2f)
+            paint.color = white
+            path.reset()
+            path.moveTo(l - 16 * s, wallTop + 4 * s)
+            path.quadTo(l + 10 * s, ridge + 18 * s, l + 40 * s, ridge)
+            path.lineTo(r - 40 * s, ridge)
+            path.quadTo(r - 10 * s, ridge + 18 * s, r + 16 * s, wallTop + 4 * s)
+            path.lineTo(r + 10 * s, wallTop + 2 * s)
+            path.quadTo(r - 14 * s, ridge + 26 * s, r - 42 * s, ridge + 9 * s)
+            path.lineTo(l + 42 * s, ridge + 9 * s)
+            path.quadTo(l + 14 * s, ridge + 26 * s, l - 10 * s, wallTop + 2 * s)
+            path.close()
+            c.drawPath(path, paint)
+            c.drawRect(x(SHELF_FROM + 30f), base - 3 * s, landX + 1440 * k, base + 3 * s, paint)
+        }
+
+        // the hearth: while Jason or Leah is home, embers glow in the smoke hole and smoke rises
+        if (h?.hearth == true) {
+            val hx = mid + 40 * s; val hy = ridge + 3 * s
+            val flick = 0.8f + 0.2f * sin(t * 0.009f) * sin(t * 0.0047f + 1.3f)
+            paint.shader = RadialGradient(hx, hy, 18 * s, intArrayOf(argb((0.35f + 0.5f * dark) * flick, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(hx, hy, 18 * s, paint); paint.shader = null
+            paint.color = argb(0.9f * flick, 0xFFECD08F.toInt()); c.drawRect(hx - 6 * s, hy - 1.5f * s, hx + 6 * s, hy + 1.5f * s, paint)
+            val smokeCol = mix(0xFF2E333C.toInt(), 0xFFB4B9C2.toInt(), light * 0.9f + 0.1f)
+            paint.colorFilter = PorterDuffColorFilter(smokeCol, PorterDuff.Mode.SRC_IN)
+            val life = 7000f; val n = 16
+            for (i in 0 until n) {
+                val age = (((t + i * life / n) % life) / life)
+                val rise = age * 230 * s
+                val drift = -age * age * 110 * s + sin(age * 7f + i) * 7 * s
+                val rad = (10 + 34 * age) * s
+                paint.alpha = (255 * 0.42f * (1 - age) * (age * 6).coerceAtMost(1f)).toInt()
+                rect.set(hx + drift - rad, hy - rise - rad * 0.6f, hx + drift + rad, hy - rise + rad * 0.6f)
+                c.drawBitmap(puff, null, rect, paint)
+            }
+            paint.colorFilter = null; paint.alpha = 255
         }
     }
 
@@ -431,8 +555,22 @@ class FjordScene(ctx: Context) {
     }
 
     fun release() {
-        land.recycle(); ship.recycle(); ray.recycle(); puff.recycle()
+        land.recycle(); ship.recycle(); ray.recycle(); puff.recycle(); sail?.recycle()
     }
+
+    /** Just the sail's cloth from the longship (the rigging and hull left out), for lighting it. */
+    private fun sailMask(src: Bitmap): Bitmap? = runCatching {
+        val w = SAIL_R - SAIL_L; val h = SAIL_B - SAIL_T
+        val px = IntArray(w * h)
+        src.getPixels(px, 0, w, SAIL_L, SAIL_T, w, h)
+        for (i in px.indices) {
+            val c = px[i]
+            val a = c ushr 24
+            val bright = maxOf(Color.red(c), Color.green(c), Color.blue(c))
+            px[i] = if (a > 100 && bright > 60) (0xFF shl 24) or (c and 0xFFFFFF) else 0
+        }
+        Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
+    }.getOrNull()
 
     // ------------------------------------------------------------------ helpers
     /**

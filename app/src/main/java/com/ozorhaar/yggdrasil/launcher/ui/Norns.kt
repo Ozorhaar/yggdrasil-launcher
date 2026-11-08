@@ -208,6 +208,15 @@ fun NornsCardView() {
                     }
                 }
             }
+            // beneath the day's threads, a verse of the High One's sayings, rolling
+            val verse by androidx.compose.runtime.produceState(Hovamol.today()) {
+                while (true) { delay(15 * 60 * 1000L); value = Hovamol.today() }
+            }
+            Text(
+                "Hovamol ${verse.first} · ${verse.second}", maxLines = 1,
+                style = TextStyle(color = Ygg.Frost.copy(alpha = 0.85f), fontSize = 11.sp, fontFamily = Ygg.Runic),
+                modifier = Modifier.padding(top = 3.dp).rollIfLong(),
+            )
         }
     }
 }

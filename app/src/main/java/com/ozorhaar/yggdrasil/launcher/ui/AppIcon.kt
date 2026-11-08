@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,21 +44,28 @@ fun ShieldImage(app: AppEntry, icons: ShieldIcons, size: Dp) {
     }
 }
 
+/** Unread count: a small ember shield (cut like the folder shields) with the number carved in. */
 @Composable
 fun Badge(count: Int, modifier: Modifier = Modifier) {
     if (count <= 0) return
     val text = if (count > 99) "99+" else count.toString()
+    val shape = CutCornerShape(30)
     Box(
         modifier
-            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
-            .background(Ygg.Ember, CircleShape)
-            .border(1.5.dp, Ygg.Night, CircleShape)
-            .padding(horizontal = 5.dp, vertical = 1.dp),
+            .defaultMinSize(minWidth = 21.dp, minHeight = 21.dp)
+            .background(Ygg.Ember, shape)
+            .border(1.5.dp, Ygg.Night, shape)
+            .padding(1.5.dp)
+            .border(0.8.dp, Ygg.GoldHi.copy(alpha = 0.7f), shape)
+            .padding(horizontal = 4.dp, vertical = 1.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
-            style = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, lineHeight = 13.sp),
+            style = TextStyle(
+                color = Ygg.Night, fontSize = 12.sp, fontWeight = FontWeight.Bold, lineHeight = 14.sp,
+                fontFamily = Ygg.Runic,
+            ),
         )
     }
 }

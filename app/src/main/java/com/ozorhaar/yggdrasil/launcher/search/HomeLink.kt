@@ -144,10 +144,14 @@ class HomeLink(context: Context) {
      * only things on the phone that may ever unlock or open, and the dock asks for your fingerprint
      * (always fresh) before it calls [setGate] with open = true. Hafnir and search stay one-way.
      */
-    enum class Gate(val entityId: String, val label: String, val camera: String) {
-        SIDE_DOOR("lock.side_door_2", "Side door", "camera.frigate_side_doorbell"),
-        GARAGE("cover.garage_rat_door", "Garage door", "camera.frigate_driveway"),
+    enum class Gate(val entityId: String, val label: String, val camera: String, val watcher: String) {
+        SIDE_DOOR("lock.side_door_2", "Side door", "camera.frigate_side_doorbell", "binary_sensor.side_doorbell_person_occupancy_2"),
+        GARAGE("cover.garage_rat_door", "Garage door", "camera.frigate_driveway", "binary_sensor.driveway_person_occupancy"),
     }
+
+    /** Whether Frigate sees someone at this door right now (its person sensor). Read only. Blocking. */
+    fun seen(g: Gate): Boolean =
+        JSONObject(request(url, token(), "GET", "/api/states/${g.watcher}", null)).optString("state") == "on"
 
     /** A still from the door's camera (JPEG bytes), through Home Assistant's camera proxy. Blocking. */
     fun gateSnapshot(g: Gate): ByteArray {
@@ -167,10 +171,13 @@ class HomeLink(context: Context) {
     fun gateState(g: Gate): String =
         JSONObject(request(url, token(), "GET", "/api/states/${g.entityId}", null)).optString("state")
 
-    /** One read of the house for the wallpaper: any light on, garage open, side door unlocked. Blocking. */
+    /**
+     * One read of the house for the wallpaper: any light on, garage open, side door unlocked,
+     * whether Jason or Leah is home (the hearth), and what the solar panels are making. Blocking.
+     */
     fun glance(): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House {
         val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
-        var lights = false; var garage = false; var door = false
+        var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val id = o.optString("entity_id"); val st = o.optString("state")
@@ -178,9 +185,11 @@ class HomeLink(context: Context) {
                 id.startsWith("light.") && st == "on" -> lights = true
                 id == Gate.GARAGE.entityId -> garage = st == "open" || st == "opening"
                 id == Gate.SIDE_DOOR.entityId -> door = st == "unlocked" || st == "open"
+                id in HEARTH_KEEPERS && st == "home" -> hearth = true
+                id == SOLAR -> solar = st.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
             }
         }
-        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door)
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar)
     }
 
     /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */
@@ -256,6 +265,10 @@ class HomeLink(context: Context) {
     companion object {
         const val DEFAULT_URL = ""
         const val AGENT = "conversation.hafnir_mac"
+        /** The hearth burns while either of them is home. */
+        private val HEARTH_KEEPERS = setOf("person.ozorhaar", "person.leah")
+        /** Solar output in watts (lights the longship's sail). */
+        private const val SOLAR = "sensor.solar_power"
         private const val KEY_ALIAS = "ygg_home_link"
         private val DOMAINS = setOf("light", "switch", "fan", "input_boolean", "lock", "cover", "scene")
         private val SAFE_SERVICES = setOf("turn_on", "turn_off", "lock", "close_cover")
