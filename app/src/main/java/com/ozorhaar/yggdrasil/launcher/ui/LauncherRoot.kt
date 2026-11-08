@@ -457,7 +457,7 @@ fun LauncherRoot() {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     drag.ownedGesture = false
-                    if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null)
+                    if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null || peekGate != null)
                         return@awaitEachGesture
                     val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
                     val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)

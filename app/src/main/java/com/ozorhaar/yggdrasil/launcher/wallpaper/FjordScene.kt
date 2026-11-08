@@ -291,7 +291,7 @@ class FjordScene(ctx: Context) {
         // the steading on the far shore: a longhouse (windows lit while the house lights are on,
         // its door glowing ember while the side door is unlocked) and a boathouse with a lantern
         // that burns while the garage is open
-        drawSteading(c, ox, oy, s, par, hz, light, p.dark)
+        drawSteading(c, landX, landTop, s, light, p.dark, landFilter)
 
         // longship, its reflection and the ripples
         val sl = lerp(1.15f, 0.65f, p.dark)
@@ -309,56 +309,71 @@ class FjordScene(ctx: Context) {
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
     }
 
-    private fun drawSteading(c: Canvas, ox: Float, oy: Float, s: Float, par: Float, hz: Float, light: Float, dark: Float) {
-        val h = house
-        fun ax(x: Float) = ox + x * s * 1.04f - 1440 * s * 0.02f + par
-        val base = hz + 1 * s
-        val wall = mix(0xFF141820.toInt(), 0xFF4B4A4C.toInt(), light)
-        val roof = mix(0xFF0E1118.toInt(), 0xFF3A3A3E.toInt(), light)
-        paint.reset(); paint.isAntiAlias = true
-        val path = android.graphics.Path()
+    private val hillColor: Int by lazy { runCatching { land.getPixel(1340, 60) }.getOrDefault(0xFF3B2F45.toInt()) }
 
-        // longhouse: long low walls, a deep turf roof and crossed gable boards at each end
-        val l = ax(1170f); val r = ax(1330f); val wallTop = base - 22 * s; val ridge = base - 52 * s
+    /**
+     * The steading on the right-hand hill, high enough to sit in the gap under the top rows of
+     * the home screen: the hilltop is levelled into a small plateau, a longhouse stands on it
+     * (windows lit while the house lights are on, its door ember while the side door is
+     * unlocked) and a boathouse beside it hangs a lantern while the garage is open.
+     * Positions are in the mountain art's own coordinates, so it moves with the hills.
+     */
+    private fun drawSteading(c: Canvas, landX: Float, landTop: Float, s: Float, light: Float, dark: Float, landFilter: ColorMatrixColorFilter) {
+        val h = house
+        val k = 1.04f * s
+        fun x(a: Float) = landX + a * k
+        fun y(a: Float) = landTop + a * s
+        val path = android.graphics.Path()
+        paint.reset(); paint.isAntiAlias = true
+
+        // level the hilltop
+        path.moveTo(x(1200f), y(70f)); path.lineTo(x(1248f), y(8f)); path.lineTo(x(1460f), y(8f)); path.lineTo(x(1460f), y(90f)); path.close()
+        paint.color = hillColor; paint.colorFilter = landFilter
+        c.drawPath(path, paint)
+        paint.colorFilter = null
+
+        val base = y(8f) + 0.5f * s
+        val wall = mix(0xFF141820.toInt(), 0xFF5A5658.toInt(), light)
+        val roof = mix(0xFF0B0E15.toInt(), 0xFF3A3638.toInt(), light)
+
+        // longhouse
+        val l = x(1318f); val r = x(1432f); val wallTop = base - 26 * s; val ridge = base - 62 * s
         paint.color = wall; c.drawRect(l, wallTop, r, base, paint)
-        path.reset(); path.moveTo(l - 10 * s, wallTop + 2 * s); path.lineTo(l + 24 * s, ridge); path.lineTo(r - 24 * s, ridge)
-        path.lineTo(r + 10 * s, wallTop + 2 * s); path.close()
+        path.reset(); path.moveTo(l - 12 * s, wallTop + 3 * s); path.lineTo(l + 26 * s, ridge); path.lineTo(r - 26 * s, ridge)
+        path.lineTo(r + 12 * s, wallTop + 3 * s); path.close()
         paint.color = roof; c.drawPath(path, paint)
-        paint.strokeWidth = 3.2f * s; paint.strokeCap = Paint.Cap.ROUND; paint.style = Paint.Style.STROKE
-        for (x in listOf(l + 24 * s, r - 24 * s)) {
-            c.drawLine(x - 10 * s, ridge + 9 * s, x + 7 * s, ridge - 10 * s, paint)
-            c.drawLine(x + 10 * s, ridge + 9 * s, x - 7 * s, ridge - 10 * s, paint)
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = 4f * s; paint.strokeCap = Paint.Cap.ROUND
+        for (gx in listOf(l + 26 * s, r - 26 * s)) {
+            c.drawLine(gx - 11 * s, ridge + 10 * s, gx + 8 * s, ridge - 12 * s, paint)
+            c.drawLine(gx + 11 * s, ridge + 10 * s, gx - 8 * s, ridge - 12 * s, paint)
         }
         paint.style = Paint.Style.FILL
 
-        // boathouse (naust) down by the water, a little in front
-        val bl = ax(1352f); val br = ax(1420f); val bTop = base - 18 * s; val bRidge = base - 40 * s
-        path.reset(); path.moveTo(bl, base + 2 * s); path.lineTo(bl, bTop); path.lineTo((bl + br) / 2, bRidge); path.lineTo(br, bTop); path.lineTo(br, base + 2 * s); path.close()
+        // boathouse beside it
+        val bl = x(1262f); val br = x(1306f); val bTop = base - 20 * s; val bRidge = base - 44 * s
+        path.reset(); path.moveTo(bl, base); path.lineTo(bl, bTop); path.lineTo((bl + br) / 2, bRidge); path.lineTo(br, bTop); path.lineTo(br, base); path.close()
         paint.color = roof; c.drawPath(path, paint)
 
-        // the lights
-        val night = 0.35f + 0.65f * dark   // lights read stronger after dark
+        val glow = 0.35f + 0.65f * dark
         if (h?.lightsOn == true) {
             val warm = 0xFFF0C070.toInt()
-            val wy = base - 13 * s
-            for (i in 0 until 4) {
-                val wx = l + (24 + i * 34) * s
-                paint.shader = RadialGradient(wx, wy, 16 * s, intArrayOf(argb(0.55f * night, warm), 0), null, Shader.TileMode.CLAMP)
-                c.drawCircle(wx, wy, 16 * s, paint); paint.shader = null
-                paint.color = argb(0.95f * night, warm)
-                c.drawRect(wx - 3.5f * s, wy - 4 * s, wx + 3.5f * s, wy + 4 * s, paint)
+            val wy = base - 14 * s
+            for (i in 0 until 3) {
+                val wx = l + (24 + i * 33) * s
+                paint.shader = RadialGradient(wx, wy, 18 * s, intArrayOf(argb(0.6f * glow, warm), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(wx, wy, 18 * s, paint); paint.shader = null
+                paint.color = argb(0.95f * glow, warm)
+                c.drawRect(wx - 4 * s, wy - 5 * s, wx + 4 * s, wy + 5 * s, paint)
             }
         }
-        // the side door, mid-wall: dark when barred, ember when unlocked
-        val dx = (l + r) / 2
-        paint.color = if (h?.doorUnlocked == true) argb(0.9f * night + 0.1f, 0xFFE0703A.toInt()) else mix(roof, 0xFF000000.toInt(), 0.4f)
-        c.drawRect(dx - 5 * s, base - 16 * s, dx + 5 * s, base, paint)
-        // the garage lantern at the boathouse
+        val dx = r - 14 * s
+        paint.color = if (h?.doorUnlocked == true) argb(0.9f * glow + 0.1f, 0xFFE0703A.toInt()) else mix(roof, 0xFF000000.toInt(), 0.4f)
+        c.drawRect(dx - 6 * s, base - 19 * s, dx + 6 * s, base, paint)
         if (h?.garageOpen == true) {
-            val lx = br + 6 * s; val ly = base - 14 * s
-            paint.shader = RadialGradient(lx, ly, 26 * s, intArrayOf(argb(0.7f * night + 0.2f, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
-            c.drawCircle(lx, ly, 26 * s, paint); paint.shader = null
-            paint.color = argb(1f, 0xFFECD08F.toInt()); c.drawCircle(lx, ly, 3.2f * s, paint)
+            val lx = bl - 8 * s; val ly = base - 16 * s
+            paint.shader = RadialGradient(lx, ly, 28 * s, intArrayOf(argb(0.7f * glow + 0.2f, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(lx, ly, 28 * s, paint); paint.shader = null
+            paint.color = 0xFFECD08F.toInt(); c.drawCircle(lx, ly, 3.5f * s, paint)
         }
     }
 
