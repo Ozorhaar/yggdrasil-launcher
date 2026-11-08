@@ -32,6 +32,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate
+import com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout
 import com.ozorhaar.yggdrasil.launcher.security.Guard
 import com.ozorhaar.yggdrasil.launcher.ygg
 import kotlinx.coroutines.CoroutineScope
@@ -51,10 +52,10 @@ class GateStates {
     fun of(g: Gate): String? = state[g]
 
     /** Doors where Frigate sees someone right now (the raven on the roof). */
-    val seen = mutableStateMapOf<Gate, Boolean>()
+    val seen = mutableStateMapOf<Lookout, Boolean>()
 
-    /** The door the raven watches: the side door first, then the driveway; null when no one's about. */
-    fun watching(): Gate? = Gate.entries.firstOrNull { seen[it] == true }
+    /** The door the raven watches: the side door first, then the driveway, then the front; null when no one's about. */
+    fun watching(): Lookout? = Lookout.entries.firstOrNull { seen[it] == true }
 
     fun put(g: Gate, s: String) {
         if (state[g] != s) since[g] = System.currentTimeMillis()
@@ -85,7 +86,7 @@ private fun Context.readGates(into: GateStates) {
 private fun Context.readWatchers(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
-    Gate.entries.forEach { g -> runCatching { link.seen(g) }.getOrNull()?.let { into.seen[g] = it } }
+    Lookout.entries.forEach { l -> runCatching { link.seen(l) }.getOrNull()?.let { into.seen[l] = it } }
 }
 
 /**
@@ -256,16 +257,17 @@ private fun pulseAlpha(alert: Boolean): Float {
  * or secure straight away.
  */
 @Composable
-fun CameraPeek(g: Gate, gates: GateStates, onClose: () -> Unit) {
+fun CameraPeek(look: Lookout, gates: GateStates, onClose: () -> Unit) {
+    val g = look.gate
     val ctx = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var frame by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var trouble by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
     val owner = LocalLifecycleOwner.current
-    LaunchedEffect(g) {
+    LaunchedEffect(look) {
         owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                val bytes = withContext(Dispatchers.IO) { runCatching { ctx.ygg.homeLink.gateSnapshot(g) } }
+                val bytes = withContext(Dispatchers.IO) { runCatching { ctx.ygg.homeLink.snapshot(look.camera) } }
                 bytes.onSuccess { b ->
                     android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.let { frame = it.asImageBitmap(); trouble = null }
                 }.onFailure { trouble = "Couldn't reach the camera" }
@@ -274,8 +276,8 @@ fun CameraPeek(g: Gate, gates: GateStates, onClose: () -> Unit) {
             }
         }
     }
-    val state = gates.of(g)
-    val action = when {
+    val state = g?.let { gates.of(it) }
+    val action = if (g == null) null else when {
         isSecure(state) -> if (g == Gate.SIDE_DOOR) "Unlock" else "Open"
         isOpen(state) -> if (g == Gate.SIDE_DOOR) "Lock" else "Close"
         else -> null
@@ -295,9 +297,9 @@ fun CameraPeek(g: Gate, gates: GateStates, onClose: () -> Unit) {
                 .padding(14.dp),
         ) {
             androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                RuneText(g.label, 22.sp, Ygg.GoldHi)
+                RuneText(look.label, 22.sp, Ygg.GoldHi)
                 androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.weight(1f))
-                RuneText(state ?: "…", 16.sp, gateColor(state))
+                if (g != null) RuneText(state ?: "…", 16.sp, gateColor(state))
             }
             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(10.dp))
             androidx.compose.foundation.layout.Box(
@@ -309,14 +311,14 @@ fun CameraPeek(g: Gate, gates: GateStates, onClose: () -> Unit) {
             ) {
                 val f = frame
                 if (f != null) androidx.compose.foundation.Image(
-                    f, contentDescription = "${g.label} camera",
+                    f, contentDescription = "${look.label} camera",
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                     modifier = androidx.compose.ui.Modifier.fillMaxSize(),
                 ) else RuneText(trouble ?: "Opening the camera…", 15.sp, Ygg.Ash)
             }
             androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
             androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
-                if (action != null) RuneButton(action) { gateTap(ctx, scope, gates, g) }
+                if (action != null && g != null) RuneButton(action) { gateTap(ctx, scope, gates, g) }
                 RuneButton("Done") { onClose() }
             }
         }

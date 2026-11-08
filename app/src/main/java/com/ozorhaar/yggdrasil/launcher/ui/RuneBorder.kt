@@ -72,10 +72,19 @@ private class Outline(val l: Float, val t: Float, val r: Float, val b: Float, ra
 }
 
 /**
+ * The battery, read into the dock's rune band: [level] 0..1, [charging], and while charging
+ * [sweep] 0..1, where the running light is.
+ */
+class BandGauge(val level: Float, val charging: Boolean, val sweep: Float)
+
+/**
  * A carved band around a rounded shape: an outer and inner line with runes
  * running between them, tops facing outward like an inscription on a ring.
+ * With a [gauge], the runes light gold from left to right as far as the battery's level
+ * (ember below 20%), the rest dim, and a frost light runs along the lit runes while charging.
  */
-fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color): Modifier = drawBehind {
+fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color, gauge: (() -> BandGauge?)? = null): Modifier = drawBehind {
+    val g = gauge?.invoke()
     val bandPx = band.toPx()
     val line = 1.dp(this)
     val outer = line
@@ -101,16 +110,31 @@ fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color): Modifier = drawBehi
     val count = (path.length / step).toInt().coerceAtLeast(1)
     val gap = path.length / count
     val stroke = Stroke(width = 1.1f * line, cap = StrokeCap.Round)
+    val span = (size.width - 2 * mid).coerceAtLeast(1f)
+    val litStroke = Stroke(width = 1.5f * line, cap = StrokeCap.Round)
     for (i in 0 until count) {
         val (pos, angle) = path.at(i * gap)
+        // with the battery gauge: lit up to the level, dim beyond; a frost light runs while charging
+        var c = color.copy(alpha = 0.8f); var dot = color.copy(alpha = 0.7f); var st = stroke
+        if (g != null) {
+            val x = (pos.x - mid) / span
+            if (x <= g.level) {
+                val base = if (g.level < 0.2f && !g.charging) Ygg.Ember else Ygg.GoldHi
+                val run = if (g.charging) (1f - kotlin.math.abs(x - g.sweep * g.level) / 0.07f).coerceIn(0f, 1f) else 0f
+                c = androidx.compose.ui.graphics.lerp(base, Ygg.Frost, run)
+                dot = c; st = litStroke
+            } else {
+                c = color.copy(alpha = 0.3f); dot = color.copy(alpha = 0.25f)
+            }
+        }
         translate(pos.x, pos.y) {
             rotate(angle, pivot = Offset.Zero) {
                 if (i % 6 == 5) {
                     // word break: two carved dots
-                    drawCircle(color.copy(alpha = 0.7f), radius = line * 0.9f, center = Offset(0f, -glyphH * 0.2f))
-                    drawCircle(color.copy(alpha = 0.7f), radius = line * 0.9f, center = Offset(0f, glyphH * 0.2f))
+                    drawCircle(dot, radius = line * 0.9f, center = Offset(0f, -glyphH * 0.2f))
+                    drawCircle(dot, radius = line * 0.9f, center = Offset(0f, glyphH * 0.2f))
                 } else {
-                    drawRune(RUNES[(i - i / 6) % RUNES.size], glyphW, glyphH, color.copy(alpha = 0.8f), stroke)
+                    drawRune(RUNES[(i - i / 6) % RUNES.size], glyphW, glyphH, c, st)
                 }
             }
         }
@@ -171,4 +195,27 @@ fun emblemFor(choice: Int, name: String, id: String): Int {
     val n = name.lowercase()
     EMBLEM_WORDS.firstOrNull { (_, words) -> words.any { it in n } }?.let { return it.first }
     return Math.floorMod(id.hashCode(), RUNES.size)
+}
+
+
+/** The phone's battery (level 0..1, charging), kept up to date from the system's battery broadcast. */
+@androidx.compose.runtime.Composable
+fun rememberBattery(): androidx.compose.runtime.State<Pair<Float, Boolean>> {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val state = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(1f to false) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        fun read(i: android.content.Intent?) {
+            if (i == null) return
+            val level = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+            val scale = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+            val plugged = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+            if (level >= 0 && scale > 0) state.value = (level / scale.toFloat()) to plugged
+        }
+        val rx = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, i: android.content.Intent) = read(i)
+        }
+        read(ctx.registerReceiver(rx, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)))
+        onDispose { runCatching { ctx.unregisterReceiver(rx) } }
+    }
+    return state
 }

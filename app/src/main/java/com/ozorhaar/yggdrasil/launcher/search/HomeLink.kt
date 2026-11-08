@@ -144,18 +144,33 @@ class HomeLink(context: Context) {
      * only things on the phone that may ever unlock or open, and the dock asks for your fingerprint
      * (always fresh) before it calls [setGate] with open = true. Hafnir and search stay one-way.
      */
-    enum class Gate(val entityId: String, val label: String, val camera: String, val watcher: String) {
-        SIDE_DOOR("lock.side_door_2", "Side door", "camera.frigate_side_doorbell", "binary_sensor.side_doorbell_person_occupancy_2"),
-        GARAGE("cover.garage_rat_door", "Garage door", "camera.frigate_driveway", "binary_sensor.driveway_person_occupancy"),
+    enum class Gate(val entityId: String, val label: String, val camera: String) {
+        SIDE_DOOR("lock.side_door_2", "Side door", "camera.frigate_side_doorbell"),
+        GARAGE("cover.garage_rat_door", "Garage door", "camera.frigate_driveway"),
+    }
+
+    /**
+     * The doors the raven watches: Frigate's person sensor and camera at each, and the gate (if
+     * any) the camera peek can work from there. The front door has none: its peek only looks.
+     */
+    enum class Lookout(val label: String, val camera: String, val watcher: String, val gate: Gate?) {
+        SIDE("Side door", Gate.SIDE_DOOR.camera, "binary_sensor.side_doorbell_person_occupancy_2", Gate.SIDE_DOOR),
+        DRIVEWAY("Garage door", Gate.GARAGE.camera, "binary_sensor.driveway_person_occupancy", Gate.GARAGE),
+        FRONT("Front door", "camera.frigate_front_doorbell", "binary_sensor.front_doorbell_person_occupancy_2", null);
+
+        companion object {
+            fun of(g: Gate): Lookout = entries.first { it.gate == g }
+        }
     }
 
     /** Whether Frigate sees someone at this door right now (its person sensor). Read only. Blocking. */
-    fun seen(g: Gate): Boolean =
-        JSONObject(request(url, token(), "GET", "/api/states/${g.watcher}", null)).optString("state") == "on"
+    fun seen(l: Lookout): Boolean =
+        JSONObject(request(url, token(), "GET", "/api/states/${l.watcher}", null)).optString("state") == "on"
 
     /** A still from the door's camera (JPEG bytes), through Home Assistant's camera proxy. Blocking. */
-    fun gateSnapshot(g: Gate): ByteArray {
-        val c = URL(url + "/api/camera_proxy/" + g.camera).openConnection() as HttpURLConnection
+    fun snapshot(camera: String): ByteArray {
+        require(camera in CAMERAS)
+        val c = URL(url + "/api/camera_proxy/" + camera).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 4000; c.readTimeout = 8000; c.instanceFollowRedirects = false
             c.setRequestProperty("Authorization", "Bearer ${token()}")
@@ -177,7 +192,7 @@ class HomeLink(context: Context) {
      */
     fun glance(): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House {
         val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
-        var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f
+        var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f; var use = -1f
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val id = o.optString("entity_id"); val st = o.optString("state")
@@ -192,9 +207,12 @@ class HomeLink(context: Context) {
                     for (j in 0 until ps.length()) if (ps.optString(j) in HEARTH_KEEPERS) hearth = true
                 }
                 id == SOLAR -> solar = st.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
+                id == HOUSE_USE -> use = st.toFloatOrNull() ?: -1f
             }
         }
-        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar)
+        // sending power to the grid when the panels make more than the house uses (unknown use: no)
+        val export = if (use >= 0f) solar - use else 0f
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar, export)
     }
 
     /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */
@@ -274,6 +292,10 @@ class HomeLink(context: Context) {
         private val HEARTH_KEEPERS = setOf("person.ozorhaar", "person.leah")
         /** Solar output in watts (lights the longship's sail). */
         private const val SOLAR = "sensor.solar_power"
+        /** What the house is using, in watts (Sense). */
+        private const val HOUSE_USE = "sensor.sense_monitor_total_power"
+        /** The only cameras the launcher may ask Home Assistant for. */
+        private val CAMERAS = Lookout.entries.map { it.camera }.toSet()
         private const val KEY_ALIAS = "ygg_home_link"
         private val DOMAINS = setOf("light", "switch", "fan", "input_boolean", "lock", "cover", "scene")
         private val SAFE_SERVICES = setOf("turn_on", "turn_off", "lock", "close_cover")

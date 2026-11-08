@@ -111,6 +111,42 @@ object Weather {
         return parse(out)
     }
 
+    /** A warning from the National Weather Service for the house's spot. */
+    data class Alert(val event: String, val headline: String, val severity: String, val description: String, val instruction: String)
+
+    private var alertsAt = 0L
+    private var alertsCache: List<Alert> = emptyList()
+
+    /**
+     * Active National Weather Service alerts (wind, winter storm, ice, flood...) for the house's
+     * spot, from api.weather.gov (free, no account), checked at most every 10 minutes. Only the
+     * rounded location is sent. Call off the main thread; empty when there are none or it's unreachable.
+     */
+    fun alerts(ctx: Context): List<Alert> {
+        if (System.currentTimeMillis() - alertsAt < 10 * 60_000L) return alertsCache
+        val (lat, lon) = place(ctx)
+        val fresh = runCatching {
+            val conn = URL("https://api.weather.gov/alerts/active?point=$lat,$lon").openConnection() as HttpURLConnection
+            conn.connectTimeout = 8000; conn.readTimeout = 8000; conn.instanceFollowRedirects = false
+            conn.setRequestProperty("User-Agent", "YggdrasilLauncher/1.0 (personal use)")
+            conn.setRequestProperty("Accept", "application/geo+json")
+            val body = try { conn.inputStream.bufferedReader().use { it.readText() } } finally { conn.disconnect() }
+            val feats = JSONObject(body).optJSONArray("features") ?: org.json.JSONArray()
+            (0 until feats.length()).mapNotNull { feats.getJSONObject(it).optJSONObject("properties") }
+                .filter { it.optString("status") == "Actual" && it.optString("messageType") != "Cancel" }
+                .map {
+                    Alert(
+                        it.optString("event"), it.optString("headline"), it.optString("severity"),
+                        it.optString("description").trim(), it.optString("instruction").trim(),
+                    )
+                }
+                .distinctBy { it.event + it.headline }
+        }.getOrNull() ?: return alertsCache
+        alertsCache = fresh
+        alertsAt = System.currentTimeMillis()
+        return fresh
+    }
+
     private fun parse(o: JSONObject) = Now(
         tempF = o.getInt("t"), highF = o.getInt("hi"), lowF = o.getInt("lo"), code = o.getInt("code"),
         isDay = o.getBoolean("day"), sunrise = o.getLong("rise"), sunset = o.getLong("set"), fetchedAt = o.getLong("at"),

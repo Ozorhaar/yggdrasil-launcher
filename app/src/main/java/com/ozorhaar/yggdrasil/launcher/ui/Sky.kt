@@ -13,6 +13,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.material3.Text
@@ -67,19 +74,39 @@ fun SkyCardView() {
             delay(15 * 60 * 1000L)
         }
     }
+    // storm warnings from the National Weather Service: the shield pulses ember, tap for the words
+    var alerts by remember { mutableStateOf<List<Weather.Alert>>(emptyList()) }
+    var showAlerts by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            alerts = withContext(Dispatchers.IO) { Weather.alerts(ctx) }
+            delay(10 * 60 * 1000L)
+        }
+    }
+    val warn = alerts.isNotEmpty()
+    val pulse = if (warn) {
+        val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "storm")
+        tr.animateFloat(
+            0.35f, 1f,
+            androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween<Float>(1100), androidx.compose.animation.core.RepeatMode.Reverse),
+            label = "storm-pulse",
+        ).value
+    } else 1f
     val shape = CutCornerShape(14.dp)
     Row(
         Modifier.fillMaxSize()
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(Ygg.Night2, Ygg.Night)), shape)
             .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), shape)
+            .then(if (warn) Modifier.clickable { showAlerts = true } else Modifier)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val n = now
         Box(
             Modifier.fillMaxHeight().aspectRatio(1f).clip(CircleShape)
-                .background(Ygg.Iron, CircleShape).border(2.dp, Dusk.gold, CircleShape),
+                .background(Ygg.Iron, CircleShape)
+                .border(if (warn) 3.dp else 2.dp, if (warn) Ygg.Ember.copy(alpha = pulse) else Dusk.gold, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(Modifier.fillMaxSize().padding(9.dp)) { drawSky(n?.sky ?: Weather.Sky.CLOUDY, n?.isDay ?: true) }
@@ -101,11 +128,51 @@ fun SkyCardView() {
             }
             val t = DateFormat.getTimeInstance(DateFormat.SHORT)
             val sun = if (System.currentTimeMillis() < n.sunset) "Sunset ${t.format(Date(n.sunset))}" else "Sunrise ${t.format(Date(n.sunrise + 24 * 3600 * 1000L))}"
-            Text(
+            if (warn) Text(
+                alerts.first().event + if (alerts.size > 1) " · +${alerts.size - 1} more" else "", maxLines = 1,
+                style = TextStyle(color = Ygg.Ember, fontSize = 13.sp, fontFamily = Ygg.Runic),
+                modifier = Modifier.rollIfLong(),
+            ) else Text(
                 "${n.words} · $sun", maxLines = 1,
                 style = TextStyle(color = Ygg.Bone, fontSize = 13.sp, fontFamily = Ygg.Runic),
                 modifier = Modifier.rollIfLong(),
             )
+        }
+    }
+    if (showAlerts && warn) StormWords(alerts) { showAlerts = false }
+}
+
+/** The warnings in full, as the weather service wrote them. */
+@Composable
+private fun StormWords(alerts: List<Weather.Alert>, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        val shape = CutCornerShape(16.dp)
+        Column(
+            Modifier.fillMaxWidth()
+                .heightIn(max = 560.dp)
+                .background(Ygg.Night2, shape)
+                .border(1.5.dp, Ygg.Ember, shape)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
+            alerts.forEachIndexed { i, a ->
+                if (i > 0) Spacer(Modifier.height(16.dp))
+                Text(a.event, style = TextStyle(color = Ygg.Ember, fontSize = 20.sp, fontFamily = Ygg.Runic))
+                if (a.headline.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(a.headline, style = TextStyle(color = Ygg.GoldHi, fontSize = 14.sp))
+                }
+                if (a.description.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(a.description, style = TextStyle(color = Ygg.Bone, fontSize = 13.sp))
+                }
+                if (a.instruction.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(a.instruction, style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            RuneButton("Done") { onClose() }
         }
     }
 }

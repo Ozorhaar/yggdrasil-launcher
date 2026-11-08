@@ -102,6 +102,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -185,7 +186,7 @@ fun LauncherRoot() {
     var garageRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val gates = rememberGates()
     val homeLinkReady = ygg.homeLink.configured
-    var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate?>(null) }
+    var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout?>(null) }
     /** Where the raven sits on the longhouse roof (null while it isn't there). */
     var ravenRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     DuskClock()
@@ -564,12 +565,12 @@ fun LauncherRoot() {
                         // hold a door's mark: look through its camera first
                         if (homeLinkReady && sideDoorRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR
+                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR)
                             return@detectTapGestures
                         }
                         if (homeLinkReady && garageRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE
+                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE)
                             return@detectTapGestures
                         }
                         // hold the bridge mark: lower or raise the bridge
@@ -913,6 +914,16 @@ private fun Dock(
     onGaragePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val homeLinked = LocalContext.current.ygg.homeLink.configured
+    // the rune band doubles as the battery gauge; a light runs along it while charging
+    val battery by rememberBattery()
+    val sweep = if (battery.second) {
+        val tr = androidx.compose.animation.core.rememberInfiniteTransition(label = "charge")
+        tr.animateFloat(
+            0f, 1f,
+            androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween<Float>(3200, easing = androidx.compose.animation.core.LinearEasing)),
+            label = "charge-sweep",
+        )
+    } else null
     Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()) {
         Row(
             Modifier
@@ -920,7 +931,7 @@ private fun Dock(
                 .fillMaxWidth()
                 .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
                 .then(
-                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold).padding(horizontal = 12.dp, vertical = 14.dp)
+                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold) { BandGauge(battery.first, battery.second, sweep?.value ?: 0f) }.padding(horizontal = 12.dp, vertical = 14.dp)
                     else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
                 ),
             horizontalArrangement = Arrangement.SpaceEvenly,

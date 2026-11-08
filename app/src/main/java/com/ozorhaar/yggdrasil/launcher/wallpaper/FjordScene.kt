@@ -69,6 +69,8 @@ class FjordScene(ctx: Context) {
     private val prefs = ctx.applicationContext.getSharedPreferences("weather", Context.MODE_PRIVATE)
     /** When snow was last seen falling (it then lies on the roofs while it stays at freezing). */
     private var snowAt = prefs.getLong("snow_at", 0L)
+    /** 0 = the longship in its bay, 1 = gone out of the fjord; -1 until the house is first read. */
+    private var shipOut = -1f
 
     var weather: Weather.Now? = Weather.cached(ctx)
 
@@ -81,7 +83,12 @@ class FjordScene(ctx: Context) {
         val hearth: Boolean = false,
         /** What the solar panels are making, in watts: the longship's sail glows with it. */
         val solarW: Float = 0f,
-    )
+        /** Power going out to the grid (solar beyond what the house uses), watts; the oars row while it flows. */
+        val exportW: Float = 0f,
+    ) {
+        /** Neither Jason nor Leah is home: the longship is away. */
+        val away: Boolean get() = !hearth
+    }
     var house: House? = null
 
     /** Set to start the ~80 s demo that runs through a day and every kind of weather. 0 = off. */
@@ -251,9 +258,12 @@ class FjordScene(ctx: Context) {
             paint.color = argb(0.92f * moonA, 0xFFEDEFF5.toInt())
             c.drawPath(Moon.litPath(mx, my, r, moonAge), paint)
         }
-        val sunA = light * (1 - p.glow) * (1 - cloud) * 0.6f
+        // midwinter: on the solstice the sun keeps low in the fjord's mouth all day
+        val solstice = isSolstice(now) && light > 0.3f
+        val sunA = if (solstice) light * (1 - cloud) * 0.7f else light * (1 - p.glow) * (1 - cloud) * 0.6f
         if (sunA > 0.02f) {
-            val sx = w * 0.72f + skyPar; val sy = h * 0.15f
+            val sx = if (solstice) ox + 1440 * s * 0.62f + skyPar else w * 0.72f + skyPar
+            val sy = if (solstice) oy + 3120 * s * 0.62f - h * 0.035f else h * 0.15f
             paint.shader = RadialGradient(sx, sy, w * 0.35f, intArrayOf(argb(sunA, 0xFFFFF4D6.toInt()), argb(sunA * 0.25f, 0xFFFFE9A8.toInt()), 0), floatArrayOf(0f, 0.25f, 1f), Shader.TileMode.CLAMP)
             c.drawCircle(sx, sy, w * 0.35f, paint); paint.shader = null
         }
@@ -285,7 +295,7 @@ class FjordScene(ctx: Context) {
 
         // the glow in the fjord's mouth at dawn and dusk
         val valleyX = ox + 1440 * s * 0.62f + skyPar
-        val glowA = p.glow * (1 - cloud * 0.7f)
+        val glowA = (if (solstice) max(p.glow, 0.75f) else p.glow) * (1 - cloud * 0.7f)
         if (glowA > 0.02f) {
             paint.shader = RadialGradient(valleyX, hz, w * 0.55f, intArrayOf(argb(0.85f * glowA, 0xFFECD08F.toInt()), argb(0.4f * glowA, 0xFFE0703A.toInt()), 0), floatArrayOf(0f, 0.3f, 1f), Shader.TileMode.CLAMP)
             c.drawRect(0f, hz - w * 0.55f, w.toFloat(), hz, paint); paint.shader = null
@@ -354,29 +364,54 @@ class FjordScene(ctx: Context) {
         // the steading on the right-hand hill: a longhouse that follows the house (see drawSteading)
         drawSteading(c, landX, landTop, s, light, p.dark, snowCover, t)
 
-        // longship, its reflection and the ripples
-        val sl = lerp(1.15f, 0.65f, p.dark)
-        val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
-        val sun = sqrt(((house?.solarW ?: 0f) / SOLAR_FULL_W).coerceIn(0f, 1f))
-        val sailRect = RectF(shipL + SAIL_L * 1.04f * s, shipT + SAIL_T * s, shipL + SAIL_R * 1.04f * s, shipT + SAIL_B * s)
-        if (sun > 0.02f) {
-            // the panels' power, caught in the sail: a warm halo behind it...
-            val r = sailRect.height() * 1.1f
-            paint.shader = RadialGradient(sailRect.centerX(), sailRect.centerY(), r, intArrayOf(argb(0.32f * sun, 0xFFECD08F.toInt()), 0), null, Shader.TileMode.CLAMP)
-            c.drawCircle(sailRect.centerX(), sailRect.centerY(), r, paint); paint.shader = null
+        // longship, its reflection and the ripples. It sails out of the fjord when no one's home
+        // and back in when someone is, and rows while the house sends power to the grid.
+        val h0 = house
+        val outTarget = if (h0?.away == true) 1f else 0f
+        if (shipOut < 0f) shipOut = if (h0 == null) 0f else outTarget
+        if (shipOut != outTarget) {
+            val step = dt / 16f                                   // ~16 s to cross the fjord
+            shipOut = if (shipOut < outTarget) min(outTarget, shipOut + step) else max(outTarget, shipOut - step)
         }
-        paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
-        rect.set(shipL, shipT, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
-        c.drawBitmap(ship, null, rect, paint)
-        paint.colorFilter = null
-        val sm = sail
-        if (sun > 0.02f && sm != null) {
-            // ...and gold light in the cloth itself
-            paint.colorFilter = PorterDuffColorFilter(0xFFECD08F.toInt(), PorterDuff.Mode.SRC_IN)
-            paint.blendMode = BlendMode.PLUS
-            paint.alpha = (150 * sun).toInt()
-            c.drawBitmap(sm, null, sailRect, paint)
-            paint.blendMode = null; paint.colorFilter = null; paint.alpha = 255
+        val sailing = shipOut != outTarget
+        val rowing = sailing || (h0?.exportW ?: 0f) > 150f
+        if (shipOut < 0.995f) {
+            val sl = lerp(1.15f, 0.65f, p.dark)
+            val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
+            // the hull's waterline glides to the fjord's mouth, shrinking with the distance
+            val pivX = shipL + 540 * 1.04f * s; val pivY = shipT + 352 * s
+            val u = shipOut * shipOut * (3 - 2 * shipOut)
+            val k = 1f - 0.9f * u
+            val fade = 1f - u * u * u
+            c.save()
+            c.translate(lerp(pivX, valleyX, u), lerp(pivY, hz, u))
+            c.scale(k, k)
+            c.translate(-pivX, -pivY)
+            val sun = sqrt(((h0?.solarW ?: 0f) / SOLAR_FULL_W).coerceIn(0f, 1f))
+            val sailRect = RectF(shipL + SAIL_L * 1.04f * s, shipT + SAIL_T * s, shipL + SAIL_R * 1.04f * s, shipT + SAIL_B * s)
+            if (sun > 0.02f) {
+                // the panels' power, caught in the sail: a warm halo behind it...
+                val r = sailRect.height() * 1.1f
+                paint.shader = RadialGradient(sailRect.centerX(), sailRect.centerY(), r, intArrayOf(argb(0.32f * sun * fade, 0xFFECD08F.toInt()), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(sailRect.centerX(), sailRect.centerY(), r, paint); paint.shader = null
+            }
+            if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
+            paint.isFilterBitmap = true
+            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
+            paint.alpha = (255 * fade).toInt()
+            rect.set(shipL, shipT, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
+            c.drawBitmap(ship, null, rect, paint)
+            paint.colorFilter = null; paint.alpha = 255
+            val sm = sail
+            if (sun > 0.02f && sm != null) {
+                // ...and gold light in the cloth itself
+                paint.colorFilter = PorterDuffColorFilter(0xFFECD08F.toInt(), PorterDuff.Mode.SRC_IN)
+                paint.blendMode = BlendMode.PLUS
+                paint.alpha = (150 * sun * fade).toInt()
+                c.drawBitmap(sm, null, sailRect, paint)
+                paint.blendMode = null; paint.colorFilter = null; paint.alpha = 255
+            }
+            c.restore()
         }
 
         // rain / snow
@@ -388,11 +423,11 @@ class FjordScene(ctx: Context) {
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
         val smoke = house?.hearth == true
         frameMs = when {
-            animating -> 66L
-            smoke -> 125L
+            animating || sailing -> 66L
+            smoke || rowing -> 125L
             else -> 60_000L
         }
-        animating = animating || smoke
+        animating = animating || smoke || sailing || rowing
         house = realHouse
     }
 
@@ -463,6 +498,36 @@ class FjordScene(ctx: Context) {
             paint.color = 0xFFECD08F.toInt(); c.drawCircle(px, ly, 4.5f * s, paint)
         } else {
             paint.color = roof; c.drawCircle(px, base - 48 * s, 4f * s, paint)
+        }
+
+        // Yule: an evergreen swag under the eaves hung with lanterns, and a wreath on the door
+        if (isYule(System.currentTimeMillis())) {
+            val green = mix(0xFF16261B.toInt(), 0xFF2F5A3A.toInt(), light * 0.8f + 0.2f)
+            paint.style = Paint.Style.STROKE; paint.strokeWidth = 5f * s; paint.strokeCap = Paint.Cap.ROUND
+            paint.color = green
+            val swags = 6
+            val ey = wallTop + 4 * s
+            for (i in 0 until swags) {
+                val x0 = l - 6 * s + (r - l + 12 * s) * i / swags
+                val x1 = l - 6 * s + (r - l + 12 * s) * (i + 1) / swags
+                path.reset(); path.moveTo(x0, ey); path.quadTo((x0 + x1) / 2, ey + 16 * s, x1, ey)
+                c.drawPath(path, paint)
+            }
+            paint.strokeWidth = 3.5f * s
+            c.drawCircle(mid, base - 38 * s, 7 * s, paint)               // the wreath
+            paint.style = Paint.Style.FILL
+            paint.color = argb(0.9f, 0xFFB0402A.toInt()); c.drawCircle(mid, base - 31.5f * s, 2.2f * s, paint)
+            // lanterns where the swags meet, twinkling a little, brighter at night
+            for (i in 0..swags) {
+                val lx = l - 6 * s + (r - l + 12 * s) * i / swags
+                val tw = 0.75f + 0.25f * sin(t * 0.003f + i * 1.7f)
+                val col = if (i % 2 == 0) 0xFFECD08F.toInt() else 0xFFE0703A.toInt()
+                val a = (0.45f + 0.55f * dark) * tw
+                paint.shader = RadialGradient(lx, ey + 6 * s, 14 * s, intArrayOf(argb(0.6f * a, col), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(lx, ey + 6 * s, 14 * s, paint); paint.shader = null
+                paint.color = argb(0.95f * a + 0.05f, col)
+                c.drawRect(lx - 3 * s, ey + 2 * s, lx + 3 * s, ey + 10 * s, paint)
+            }
         }
 
         // snow on the turf roof and the shelf it stands on
@@ -555,6 +620,45 @@ class FjordScene(ctx: Context) {
                 c.drawLine(x, y, x + len * 0.18f * d[2], y - len * d[2], paint)
             }
         }
+    }
+
+    /**
+     * Oars out of the ports along the hull, sweeping aft through the water in a steady stroke and
+     * lifting back; drawn behind the hull so they come out from under the shields.
+     */
+    private fun drawOars(c: Canvas, shipL: Float, shipT: Float, s: Float, t: Float, fade: Float, dark: Float) {
+        val k = 1.04f * s
+        paint.reset(); paint.isAntiAlias = true
+        paint.strokeCap = Paint.Cap.ROUND
+        val wood = argb(fade, mix(0xFF5A4630.toInt(), 0xFF1C150F.toInt(), dark))
+        val phase = t * 0.0026f                                    // about one stroke every 2.4 s
+        for (i in 0 until 9) {
+            val px = shipL + (250 + i * 55) * k; val py = shipT + 350 * s
+            val a = (PI / 2 + 0.42 * sin(phase.toDouble())).toFloat()   // swing fore and aft
+            val len = (118 + 16 * kotlin.math.cos(phase.toDouble()).toFloat()) * s  // dips in, lifts out
+            val ex = px + kotlin.math.cos(a.toDouble()).toFloat() * len
+            val ey = py + sin(a.toDouble()).toFloat() * len
+            paint.color = wood; paint.strokeWidth = 3.2f * s
+            c.drawLine(px, py, ex, ey, paint)
+            paint.strokeWidth = 7f * s
+            val bx = px + kotlin.math.cos(a.toDouble()).toFloat() * len * 0.82f
+            val by = py + sin(a.toDouble()).toFloat() * len * 0.82f
+            c.drawLine(bx, by, ex, ey, paint)
+        }
+        paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    /** 21 December, the midwinter solstice (as it falls in North America's eastern time). */
+    private fun isSolstice(now: Long): Boolean {
+        val cal = Calendar.getInstance().apply { timeInMillis = now }
+        return cal.get(Calendar.MONTH) == Calendar.DECEMBER && cal.get(Calendar.DAY_OF_MONTH) == 21
+    }
+
+    /** Yule: all of December and the first days of January, until the twelfth night (6 January). */
+    private fun isYule(now: Long): Boolean {
+        val cal = Calendar.getInstance().apply { timeInMillis = now }
+        val m = cal.get(Calendar.MONTH); val d = cal.get(Calendar.DAY_OF_MONTH)
+        return m == Calendar.DECEMBER || (m == Calendar.JANUARY && d <= 6)
     }
 
     fun release() {

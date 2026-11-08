@@ -27,7 +27,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
-import com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate
+import com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout
 import com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -38,15 +38,15 @@ private val RAVEN = Color(0xFF05070C)
 private val RIM = Ygg.Frost.copy(alpha = 0.45f)
 
 /**
- * One of Odin's ravens keeps watch over the steading. When Frigate sees someone at the side door
- * or in the driveway, a raven flies in from the right and perches on the longhouse ridge; a tap on
+ * One of Odin's ravens keeps watch over the steading. When Frigate sees someone at the side door,
+ * in the driveway or at the front door, a raven flies in from the right and perches on the longhouse ridge; a tap on
  * it opens that door's camera peek. When the person has gone, it flies off over the fjord.
  *
  * Drawn above the wallpaper and below the icons, in the same coordinates as the wallpaper's
  * longhouse ([FjordScene.ridgePerch]). It only animates while it's on screen.
  */
 @Composable
-fun RavenWatch(watching: Gate?, wallX: () -> Float, onPerch: (Rect?) -> Unit) {
+fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit) {
     val flight = remember { Animatable(0f) }       // 0 = away, 1 = on the ridge
     var present by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
