@@ -189,6 +189,8 @@ fun LauncherRoot() {
     var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout?>(null) }
     /** Where the raven sits on the longhouse roof (null while it isn't there). */
     var ravenRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
+    /** Where the delivery chest sits by the longhouse door (null while there's none). */
+    var chestRect by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     DuskClock()
     LaunchedEffect(Unit) { Carved.warm(ctx) }
     val bridge by rememberBridge()
@@ -464,6 +466,7 @@ fun LauncherRoot() {
                         return@awaitEachGesture
                     // a tap on the raven is the raven's, not the icon's under it
                     if (openFolder == null && ravenRect?.contains(down.position) == true) return@awaitEachGesture
+                    if (openFolder == null && chestRect?.contains(down.position) == true) return@awaitEachGesture
                     val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
                     val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)
                     val item = loc?.let { layout.itemAt(it) }
@@ -518,6 +521,13 @@ fun LauncherRoot() {
                         if (raven != null && openFolder == null && ravenRect?.contains(p) == true) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             peekGate = raven
+                            return@detectTapGestures
+                        }
+                        // the chest at the door: look at the package through that door's camera
+                        val chest = gates.parcelAt()
+                        if (chest != null && openFolder == null && chestRect?.contains(p) == true) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            peekGate = chest
                             return@detectTapGestures
                         }
                         // the marks on the band: settings (left), Hafnir (right)
@@ -630,6 +640,15 @@ fun LauncherRoot() {
                     ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
             },
             onPerch = { ravenRect = it },
+        )
+        if (homeLinkReady) ChestAtDoor(
+            look = gates.parcelAt(),
+            wallX = {
+                val n = layout.pages.size
+                if (n > 1 && layout.layoutMode == LayoutMode.GRID)
+                    ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+            },
+            onPlaced = { chestRect = it },
         )
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -163,6 +163,30 @@ class HomeLink(context: Context) {
         }
     }
 
+    private var parcelIds: Map<Lookout, List<String>> = emptyMap()
+    private var parcelIdsAt = 0L
+
+    /**
+     * Where Frigate sees a package waiting: front or side doorbell. Finds the package sensors by
+     * name (Frigate names them like binary_sensor.front_doorbell_package_occupancy) every 10
+     * minutes, then reads just those. Read only. Blocking.
+     */
+    fun parcels(): Set<Lookout> {
+        if (System.currentTimeMillis() - parcelIdsAt > 10 * 60_000L) {
+            val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
+            val ids = (0 until arr.length()).map { arr.getJSONObject(it).optString("entity_id") }
+                .filter { it.startsWith("binary_sensor.") && it.contains("package_occupancy") }
+            parcelIds = mapOf(
+                Lookout.FRONT to ids.filter { it.contains("front_doorbell") },
+                Lookout.SIDE to ids.filter { it.contains("side_doorbell") },
+            )
+            parcelIdsAt = System.currentTimeMillis()
+        }
+        return parcelIds.filter { (_, ids) ->
+            ids.any { JSONObject(request(url, token(), "GET", "/api/states/$it", null)).optString("state") == "on" }
+        }.keys
+    }
+
     /** Whether Frigate sees someone at this door right now (its person sensor). Read only. Blocking. */
     fun seen(l: Lookout): Boolean =
         JSONObject(request(url, token(), "GET", "/api/states/${l.watcher}", null)).optString("state") == "on"

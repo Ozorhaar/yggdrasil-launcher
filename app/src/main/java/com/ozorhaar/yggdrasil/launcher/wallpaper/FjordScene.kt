@@ -64,6 +64,17 @@ class FjordScene(ctx: Context) {
             val l = landX + HALL_L * 1.04f * s; val r = landX + HALL_R * 1.04f * s
             return Triple(l + 40 * s + (r - l - 80 * s) * 0.18f, ridge, s)
         }
+
+        /** The ground just right of the longhouse's door, where a delivered chest sits. Must match drawSteading. */
+        fun doorStep(w: Int, h: Int, xOffset: Float): Triple<Float, Float, Float> {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val landX = ox - 1440 * s * 0.02f + par
+            val base = oy + 1327 * s + 68 * s + 0.5f * s
+            val mid = landX + (HALL_L + HALL_R) / 2 * 1.04f * s
+            return Triple(mid + 30 * s, base, s)
+        }
     }
 
     private val prefs = ctx.applicationContext.getSharedPreferences("weather", Context.MODE_PRIVATE)

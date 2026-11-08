@@ -54,6 +54,12 @@ class GateStates {
     /** Doors where Frigate sees someone right now (the raven on the roof). */
     val seen = mutableStateMapOf<Lookout, Boolean>()
 
+    /** Doors where Frigate sees a package waiting (the chest at the longhouse door). */
+    val parcel = mutableStateMapOf<Lookout, Boolean>()
+
+    /** The door whose package the chest stands for: the front first, then the side; null when none. */
+    fun parcelAt(): Lookout? = listOf(Lookout.FRONT, Lookout.SIDE).firstOrNull { parcel[it] == true }
+
     /** The door the raven watches: the side door first, then the driveway, then the front; null when no one's about. */
     fun watching(): Lookout? = Lookout.entries.firstOrNull { seen[it] == true }
 
@@ -80,6 +86,7 @@ private fun Context.readGates(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
     Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.put(g, it) } }
+    runCatching { link.parcels() }.getOrNull()?.let { got -> Lookout.entries.forEach { into.parcel[it] = it in got } }
     into.readAt = System.currentTimeMillis()
 }
 
