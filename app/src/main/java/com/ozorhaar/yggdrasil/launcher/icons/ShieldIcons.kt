@@ -18,7 +18,7 @@ import kotlin.math.abs
 /**
  * Renders every app as a round gold longship shield with its glyph "carved" in dark
  * iron and a thin accent ring (frost, ember or bone). Apps that ship a monochrome (themed) icon get a clean carved glyph; the
- * rest get their own icon inlaid in the shield, toned down to match.
+ * rest get the first letter of their name carved as a rune.
  */
 class ShieldIcons(
     private val sizePx: Int,
@@ -76,21 +76,16 @@ class ShieldIcons(
             m.setBounds(off, off, off + b, off + b)
             m.setTint(CARVE)
             m.draw(c)
-        } else if (icon != null) {
-            // inlay: the app's own icon, desaturated, clipped to a disc
-            val save = c.save()
-            val clip = Path().apply { addCircle(cx, cx, s * 0.33f, Path.Direction.CW) }
-            c.clipPath(clip)
-            val d = icon.mutate()
-            val inset = if (icon is AdaptiveIconDrawable) -(s * 0.10f).toInt() else (s * 0.16f).toInt()
-            d.setBounds(inset, inset, sizePx - inset, sizePx - inset)
-            d.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0.35f) })
-            d.draw(c)
-            c.restoreToCount(save)
-            p.style = Paint.Style.STROKE
-            p.strokeWidth = s * 0.02f
-            p.color = NIGHT
-            c.drawCircle(cx, cx, s * 0.33f, p)
+        } else {
+            // no themed icon and no Yggdrasil glyph: carve the first letter of its name as a rune
+            p.style = Paint.Style.FILL
+            p.color = CARVE
+            p.typeface = android.graphics.Typeface.DEFAULT_BOLD
+            p.textAlign = Paint.Align.CENTER
+            p.textSize = s * 0.46f
+            val rune = Runes.forLabel(app.label)
+            val fm = p.fontMetrics
+            c.drawText(rune, cx, cx - (fm.ascent + fm.descent) / 2f, p)
         }
         return bmp.asImageBitmap()
     }
