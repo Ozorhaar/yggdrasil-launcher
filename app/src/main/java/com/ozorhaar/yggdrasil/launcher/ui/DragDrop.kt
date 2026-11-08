@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CutCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -32,6 +35,7 @@ import com.ozorhaar.yggdrasil.launcher.data.AppEntry
 import com.ozorhaar.yggdrasil.launcher.data.Folder
 import com.ozorhaar.yggdrasil.launcher.data.Loc
 import com.ozorhaar.yggdrasil.launcher.icons.ShieldIcons
+import com.ozorhaar.yggdrasil.launcher.ygg
 
 /** What is being dragged, where the finger is, and what it is hovering over. */
 class DragState {
@@ -198,11 +202,49 @@ fun FolderTile(
     showLabel: Boolean = true,
 ) {
     val badge = folder.apps.sumOf { key -> byKey[key]?.let { badges[it.packageName] } ?: 0 }
+    val onWatch = rememberOnCall(folder, byKey)
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp)) {
         Box {
             FolderIcon(folder, byKey, icons, iconSize)
-            Badge(badge, Modifier.align(Alignment.TopEnd).offset(x = 6.dp, y = (-4).dp))
+            if (onWatch) WatchRune(Modifier.align(Alignment.TopEnd).offset(x = iconSize * 0.1f, y = -(iconSize * 0.1f)), iconSize * 0.3f)
+            // with the watch rune in the top corner, the unread count moves to the other one
+            Badge(badge, Modifier.align(if (onWatch) Alignment.TopStart else Alignment.TopEnd).offset(x = if (onWatch) (-6).dp else 6.dp, y = (-4).dp))
         }
         if (showLabel) TileLabel(folder.name, runic)
+    }
+}
+
+
+/**
+ * True while you're on call and this is the watch's folder: the one holding the watched widget's
+ * app, or else the folder named Work. Re-checked every minute, so a shift that starts while the
+ * widget hasn't refreshed still lights the rune.
+ */
+@Composable
+fun rememberOnCall(folder: Folder, byKey: Map<String, AppEntry>): Boolean {
+    val ygg = androidx.compose.ui.platform.LocalContext.current.ygg
+    val texts by ygg.watch.texts.collectAsState()
+    if (ygg.watch.widgetId < 0) return false
+    val pkg = ygg.watch.providerPackage
+    val mine = folder.apps.any { byKey[it]?.packageName == pkg } || folder.name.trim().equals("work", ignoreCase = true)
+    if (!mine) return false
+    var tick by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(60_000L); tick = System.currentTimeMillis() } }
+    return com.ozorhaar.yggdrasil.launcher.watch.Watch.isOnCall(texts, tick)
+}
+
+/** On call: dagaz, the rune of day and waking, in frost on a night disc (the padlock's size). */
+@Composable
+fun WatchRune(modifier: Modifier, size: Dp) {
+    Canvas(modifier.size(size)) {
+        val w = this.size.width
+        drawCircle(Ygg.Night, radius = w / 2f)
+        drawCircle(Ygg.Frost, radius = w / 2f - w * 0.04f, style = Stroke(width = w * 0.07f))
+        val s = w * 0.09f
+        val l = w * 0.27f; val r = w * 0.73f; val t = w * 0.3f; val b = w * 0.7f
+        drawLine(Ygg.Frost, Offset(l, t), Offset(l, b), s, StrokeCap.Round)
+        drawLine(Ygg.Frost, Offset(r, t), Offset(r, b), s, StrokeCap.Round)
+        drawLine(Ygg.Frost, Offset(l, t), Offset(r, b), s, StrokeCap.Round)
+        drawLine(Ygg.Frost, Offset(l, b), Offset(r, t), s, StrokeCap.Round)
     }
 }

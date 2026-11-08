@@ -665,11 +665,29 @@ fun LauncherRoot() {
                         scope.launch { delay(50); pager.animateScrollToPage(page) }
                     } else Toast.makeText(ctx, "The Skald is already on your home screen", Toast.LENGTH_SHORT).show()
                 },
+                onPickSky = {
+                    widgetPicker = false
+                    if (layout.widgets.none { it.provider == SkyCard.PROVIDER }) {
+                        val page = layout.addWidget(SkyCard.ID, SkyCard.PROVIDER, SkyCard.WIDTH, SkyCard.HEIGHT, pager.currentPage)
+                        scope.launch { delay(50); pager.animateScrollToPage(page) }
+                    } else Toast.makeText(ctx, "The Sky is already on your home screen", Toast.LENGTH_SHORT).show()
+                },
                 onClose = { widgetPicker = false },
             )
         }
         widgetMenu?.let { id -> layout.widgets.firstOrNull { it.id == id } }?.let { spot ->
-            WidgetSheet(spot, layout, onRemove = { removeWidget(spot.id) }, onClose = { widgetMenu = null })
+            WidgetSheet(
+                spot, layout,
+                onRemove = { removeWidget(spot.id) },
+                onWatch = {
+                    // off the grid, still bound: the watch reads it from now on
+                    layout.removeWidget(spot.id)
+                    ygg.widgetViews.remove(spot.id)
+                    ygg.watch.set(spot.id, spot.provider) { id -> runCatching { widgetManager.getAppWidgetInfo(id) }.getOrNull() }
+                    widgetMenu = null
+                },
+                onClose = { widgetMenu = null },
+            )
         }
 
         menu?.let { target ->

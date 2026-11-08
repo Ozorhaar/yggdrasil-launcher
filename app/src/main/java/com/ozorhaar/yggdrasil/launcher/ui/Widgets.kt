@@ -84,6 +84,7 @@ fun Modifier.widgetCell(drag: DragState, id: Int, page: Int): Modifier {
 @Composable
 fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
     if (spot.provider == Skald.PROVIDER) { SkaldCard(); return }
+    if (spot.provider == SkyCard.PROVIDER) { SkyCardView(); return }
     val ctx = LocalContext.current
     val ygg = ctx.ygg
     val info = remember(spot.id) { runCatching { ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
@@ -141,6 +142,7 @@ fun WidgetPicker(
     onPick: (AppWidgetProviderInfo) -> Unit,
     onPickShortcut: (android.content.pm.LauncherActivityInfo) -> Unit,
     onPickSkald: () -> Unit,
+    onPickSky: () -> Unit,
     onClose: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -213,6 +215,24 @@ fun WidgetPicker(
                         Column(Modifier.weight(1f)) {
                             Text("Skald: now playing", style = TextStyle(color = Ygg.Bone, fontSize = 16.sp))
                             Text("${Skald.WIDTH} × ${Skald.HEIGHT} · any music app", style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
+                        }
+                    }
+                }
+            }
+            if (query.isBlank() || "sky weather sun forecast yggdrasil".looselyHas(query)) {
+                item(key = SkyCard.PROVIDER) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onPickSky() }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(120.dp).height(52.dp)) {
+                            SkyCardView()
+                            Box(Modifier.matchParentSize().clickable { onPickSky() })
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Sky: weather", style = TextStyle(color = Ygg.Bone, fontSize = 16.sp))
+                            Text("${SkyCard.WIDTH} × ${SkyCard.HEIGHT} · temperature, sky, sunrise and sunset", style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
                         }
                     }
                 }
@@ -294,11 +314,17 @@ private fun WidgetPreview(info: AppWidgetProviderInfo, modifier: Modifier) {
 
 /** Options for one widget: resize or remove. */
 @Composable
-fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onClose: () -> Unit) {
+fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onWatch: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current
     val builtin = Skald.isBuiltin(spot.provider)
     val info = remember(spot.id) { if (builtin) null else runCatching { ctx.ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
-    val name = remember(info) { if (builtin) "Skald (now playing)" else info?.loadLabel(ctx.packageManager) ?: "Widget" }
+    val name = remember(info) {
+        when {
+            spot.provider == Skald.PROVIDER -> "Skald (now playing)"
+            spot.provider == SkyCard.PROVIDER -> "Sky (weather)"
+            else -> info?.loadLabel(ctx.packageManager) ?: "Widget"
+        }
+    }
     val resizable = info == null || info.resizeMode != AppWidgetProviderInfo.RESIZE_NONE
     Box(
         Modifier.fillMaxSize().background(Color(0x99000000))
@@ -322,6 +348,14 @@ fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onC
                 RuneText("This widget has a fixed size. Hold and drag it to move it.", 13.sp, Ygg.Ash)
             }
             Spacer(Modifier.height(8.dp))
+            if (!builtin) {
+                Box(Modifier.fillMaxWidth().clickable { onWatch() }.padding(vertical = 12.dp)) {
+                    Column {
+                        RuneText("Hide it and keep watch", 18.sp, Ygg.Frost)
+                        RuneText("Shows a frost rune on its app's folder while you're on call", 13.sp, Ygg.Ash)
+                    }
+                }
+            }
             Box(Modifier.fillMaxWidth().clickable { onRemove() }.padding(vertical = 12.dp)) {
                 RuneText("Remove widget", 18.sp, Ygg.Ember)
             }

@@ -23,8 +23,12 @@ class YggApp : Application() {
     lateinit var layout: LayoutStore
         private set
 
-    /** Hosts the home-screen widgets. */
+    /** Hosts the home-screen widgets (and tells the watch when its hidden widget changes). */
     lateinit var widgetHost: android.appwidget.AppWidgetHost
+        private set
+
+    /** The hidden on-call widget, read for the rune on the Work folder. */
+    lateinit var watch: com.ozorhaar.yggdrasil.launcher.watch.Watch
         private set
     val widgetManager: android.appwidget.AppWidgetManager by lazy { android.appwidget.AppWidgetManager.getInstance(this) }
     /** Live widget views, reused when a page scrolls back into view. */
@@ -41,7 +45,9 @@ class YggApp : Application() {
     override fun onCreate() {
         super.onCreate()
         repo = AppRepository(this)
-        widgetHost = android.appwidget.AppWidgetHost(this, WIDGET_HOST_ID)
+        widgetHost = com.ozorhaar.yggdrasil.launcher.watch.YggWidgetHost(this, WIDGET_HOST_ID) { if (::watch.isInitialized) watch else null }
+        watch = com.ozorhaar.yggdrasil.launcher.watch.Watch(this) { widgetHost }
+        watch.start { id -> runCatching { widgetManager.getAppWidgetInfo(id) }.getOrNull() }
         layout = LayoutStore(this)
         repo.start()
         if (!layout.initialized) seedDefaultLayout()
