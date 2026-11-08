@@ -139,6 +139,32 @@ class HomeLink(context: Context) {
         }.getOrDefault("?")
     }
 
+    /**
+     * The two doors the dock's marks work: the side door lock and the garage door. These are the
+     * only things on the phone that may ever unlock or open, and the dock asks for your fingerprint
+     * (always fresh) before it calls [setGate] with open = true. Hafnir and search stay one-way.
+     */
+    enum class Gate(val entityId: String, val label: String) {
+        SIDE_DOOR("lock.side_door_2", "Side door"),
+        GARAGE("cover.garage_rat_door", "Garage door"),
+    }
+
+    /** The door's state as HA reports it (locked/unlocked/open/closed/opening/...). Blocking. */
+    fun gateState(g: Gate): String =
+        JSONObject(request(url, token(), "GET", "/api/states/${g.entityId}", null)).optString("state")
+
+    /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */
+    fun setGate(g: Gate, open: Boolean) {
+        val domain = g.entityId.substringBefore('.')
+        val service = when (domain) {
+            "lock" -> if (open) "unlock" else "lock"
+            "cover" -> if (open) "open_cover" else "close_cover"
+            else -> error("Not a door")
+        }
+        request(url, token(), "POST", "/api/services/$domain/$service", JSONObject().put("entity_id", g.entityId).toString())
+        cachedAt = 0L
+    }
+
     /** The house's latitude/longitude from Home Assistant's config, or null if not connected. Blocking. */
     fun homeLocation(): Pair<Double, Double>? = runCatching {
         if (!configured) return null

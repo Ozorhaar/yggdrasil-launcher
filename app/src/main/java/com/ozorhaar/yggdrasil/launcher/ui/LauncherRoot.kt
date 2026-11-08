@@ -181,6 +181,9 @@ fun LauncherRoot() {
     var bridgeRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var hafnirGemRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var settingsGemRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var sideDoorRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    var garageRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    val gates = rememberGates()
     val bridge by rememberBridge()
     val bridgeScope = rememberCoroutineScope()
     val rootSize = remember { IntArray(2) }
@@ -505,6 +508,17 @@ fun LauncherRoot() {
                             ctx.openAssistant()
                             return@detectTapGestures
                         }
+                        // the doors: side door over the second dock icon, garage over the fourth
+                        if (sideDoorRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            gateTap(ctx, scope, gates, com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR)
+                            return@detectTapGestures
+                        }
+                        if (garageRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            gateTap(ctx, scope, gates, com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE)
+                            return@detectTapGestures
+                        }
                         if (settingsGemRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             settingsOpen = true
@@ -591,7 +605,8 @@ fun LauncherRoot() {
             }
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
             Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it },
-                onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it })
+                onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it },
+                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it })
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -847,7 +862,11 @@ private fun Dock(
     onBridgePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onHafnirPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onSettingsPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    gates: GateStates? = null,
+    onSideDoorPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onGaragePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
+    val homeLinked = LocalContext.current.ygg.homeLink.configured
     Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth()) {
         Row(
             Modifier
@@ -881,6 +900,14 @@ private fun Dock(
                         when (i) {
                             0 -> SettingsGem(Modifier.onGloballyPositioned { onSettingsPlaced(it.boundsInRoot()) })
                             layout.dock.lastIndex -> HafnirGem(Modifier.onGloballyPositioned { onHafnirPlaced(it.boundsInRoot()) })
+                            1 -> if (gates != null && layout.dock.size >= 5 && homeLinked) SideDoorGem(
+                                gates.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR),
+                                Modifier.onGloballyPositioned { onSideDoorPlaced(it.boundsInRoot()) },
+                            )
+                            3 -> if (gates != null && layout.dock.size >= 5 && homeLinked) GarageGem(
+                                gates.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE),
+                                Modifier.onGloballyPositioned { onGaragePlaced(it.boundsInRoot()) },
+                            )
                         }
                     }
                 }
