@@ -35,9 +35,9 @@ object Hoard {
     private const val DAY = 24 * 3600 * 1000L
 
     /** Schedules the nightly backup (once; Android keeps it across restarts). */
-    fun schedule(ctx: Context) {
+    fun schedule(ctx: Context) = runCatching {
         val js = ctx.getSystemService(JobScheduler::class.java)
-        if (js.getPendingJob(JOB_ID) != null) return
+        if (js.getPendingJob(JOB_ID) != null) return@runCatching
         js.schedule(
             JobInfo.Builder(JOB_ID, ComponentName(ctx, HoardJob::class.java))
                 .setPeriodic(DAY, 6 * 3600 * 1000L)
@@ -46,7 +46,7 @@ object Hoard {
                 .setPersisted(true)
                 .build()
         )
-    }
+    }.let { }
 
     /** Encrypts and sends the layout now. Returns a short result for the settings screen. Blocking. */
     fun sendNow(ctx: Context): String = runCatching {

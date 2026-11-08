@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- keeps the nightly layout backup (the Hoard) scheduled after a restart -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- the backup job waits for a network: Android needs this to check -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- in-app updates: Android still asks you to confirm every install -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- fingerprint for locked apps, folders and hidden apps (Android's own prompt) -->
