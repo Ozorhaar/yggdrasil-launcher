@@ -19,9 +19,15 @@ object Runes {
     /** ingwaz, for names that start with a digit or anything else */
     private const val OTHER = "ᛜ"
 
-    fun forLabel(label: String): String {
+    fun forLabel(label: String): String = BY_LETTER[letterOf(label)] ?: OTHER
+
+    /** The plain first letter of a name ('a'..'z'), or '#' for digits and anything else. */
+    fun letterOf(label: String): Char {
         val plain = Normalizer.normalize(label, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
-        val first = plain.firstOrNull { it.isLetterOrDigit() } ?: return OTHER
-        return BY_LETTER[first] ?: OTHER
+        val first = plain.firstOrNull { it.isLetterOrDigit() } ?: return '#'
+        return if (first in 'a'..'z') first else '#'
     }
+
+    /** The rune carved for a letter from [letterOf]. */
+    fun forLetter(c: Char): String = BY_LETTER[c] ?: OTHER
 }

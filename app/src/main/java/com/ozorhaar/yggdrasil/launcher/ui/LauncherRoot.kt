@@ -1253,19 +1253,27 @@ private fun AppDrawer(
             RuneButton("Widgets") { keyboard?.hide(); onWidgets() }
             RuneButton("Settings") { keyboard?.hide(); onSettings() }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(4),
-            modifier = Modifier.fillMaxSize().nestedScroll(pullToClose).padding(horizontal = 8.dp),
-        ) {
-            items(shown, key = { it.key }) { app ->
-                Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-                    AppTile(
-                        app, icons, badges[app.packageName] ?: 0, runic, 54.dp,
-                        onClick = { keyboard?.hide(); onLaunch(app) },
-                        onLongClick = { onLong(app) },
-                    )
+        val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        val scrubbing = query.isBlank()
+        Box(Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                state = gridState,
+                modifier = Modifier.fillMaxSize().nestedScroll(pullToClose)
+                    .padding(start = 8.dp, end = if (scrubbing) 40.dp else 8.dp),
+            ) {
+                items(shown, key = { it.key }) { app ->
+                    Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                        AppTile(
+                            app, icons, badges[app.packageName] ?: 0, runic, 54.dp,
+                            onClick = { keyboard?.hide(); onLaunch(app) },
+                            onLongClick = { onLong(app) },
+                        )
+                    }
                 }
             }
+            // the rune scrubber down the right edge (hidden while searching)
+            if (scrubbing) RuneScrubber(shown, gridState, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp, top = 4.dp, bottom = 8.dp))
         }
     }
 }
