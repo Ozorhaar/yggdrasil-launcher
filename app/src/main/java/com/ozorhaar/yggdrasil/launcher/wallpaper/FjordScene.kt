@@ -33,6 +33,11 @@ import kotlin.random.Random
 const val DEMO_SECONDS = 80f
 const val DEMO_PREF = "fjord_demo_start"
 
+/** The longhouse's shelf on the right-hand hill, in the mountain art's coordinates. */
+private const val SHELF_Y = 68
+private const val SHELF_FROM = 1040
+private const val SHELF_FULL = 1112
+
 class FjordScene(ctx: Context) {
 
     var weather: Weather.Now? = Weather.cached(ctx)
@@ -48,7 +53,7 @@ class FjordScene(ctx: Context) {
     var animating = false
         private set
 
-    private val land: Bitmap = decode(ctx, R.drawable.fjord_land)
+    private val land: Bitmap = levelHilltop(decode(ctx, R.drawable.fjord_land))
     private val ship: Bitmap = decode(ctx, R.drawable.fjord_ship)
     private val ray: Bitmap = auroraRay()
     private val puff: Bitmap = cloudPuff()
@@ -307,7 +312,6 @@ class FjordScene(ctx: Context) {
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
     }
 
-    private val hillColor: Int by lazy { runCatching { land.getPixel(1340, 60) }.getOrDefault(0xFF3B2F45.toInt()) }
 
     /**
      * The steading on the right-hand hill, filling the gap under the top rows of the home screen:
@@ -323,12 +327,6 @@ class FjordScene(ctx: Context) {
         fun y(a: Float) = landTop + a * s
         val path = android.graphics.Path()
         paint.reset(); paint.isAntiAlias = true
-
-        // level the hilltop into a broad shelf for the hall (the peaks behind it are hidden by the roof)
-        path.moveTo(x(1020f), y(170f)); path.lineTo(x(1092f), y(68f)); path.lineTo(x(1460f), y(68f)); path.lineTo(x(1460f), y(210f)); path.close()
-        paint.color = hillColor; paint.colorFilter = landFilter
-        c.drawPath(path, paint)
-        paint.colorFilter = null
 
         val base = y(68f) + 0.5f * s
         val wall = mix(0xFF141820.toInt(), 0xFF5A5658.toInt(), light)
@@ -437,6 +435,40 @@ class FjordScene(ctx: Context) {
     }
 
     // ------------------------------------------------------------------ helpers
+    /**
+     * Levels the right-hand hilltop into a shelf for the longhouse, in the mountain art itself so it
+     * stays one mountain: peaks above the shelf are cut away, and where the hill is lower the
+     * ground is raised with that column's own surface colour (keeping the lit and shaded faces),
+     * easing in from the natural ridge on the left.
+     */
+    private fun levelHilltop(src: Bitmap): Bitmap {
+        val b = runCatching { src.copy(Bitmap.Config.ARGB_8888, true) }.getOrNull() ?: return src
+        src.recycle()
+        val h = b.height
+        val col = IntArray(h)
+        val from = SHELF_FROM; val full = SHELF_FULL
+        for (x in from until b.width) {
+            b.getPixels(col, 0, 1, x, 0, 1, h)
+            var top = 0
+            while (top < h && (col[top] ushr 24) < 128) top++
+            if (top >= h) continue
+            val target = if (x >= full) SHELF_Y.toFloat() else {
+                val f = (x - from) / (full - from).toFloat()
+                val e = f * f * (3 - 2 * f)
+                top + (SHELF_Y - top) * e
+            }.toFloat()
+            val t = target.toInt().coerceIn(0, h - 1)
+            if (top < t) {
+                for (y in 0 until t) col[y] = 0
+            } else if (top > t) {
+                val surface = col[(top + 8).coerceAtMost(h - 1)]
+                for (y in t until top) col[y] = surface
+            }
+            b.setPixels(col, 0, 1, x, 0, 1, h)
+        }
+        return b
+    }
+
     private fun decode(ctx: Context, res: Int): Bitmap =
         BitmapFactory.decodeResource(ctx.resources, res, BitmapFactory.Options().apply { inScaled = false })
 
