@@ -120,7 +120,7 @@ fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons,
     Box(
         Modifier.size(size)
             .background(Ygg.Night.copy(alpha = 0.72f), shape)
-            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), shape)
+            .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), shape)
             .padding(size * 0.08f),
         contentAlignment = Alignment.Center,
     ) {
@@ -148,7 +148,7 @@ fun FolderIcon(folder: Folder, byKey: Map<String, AppEntry>, icons: ShieldIcons,
                 Modifier.align(Alignment.BottomStart).offset(x = -(size * 0.16f), y = size * 0.16f)
                     .size(m)
                     .background(Ygg.Night, CutCornerShape(m * 0.3f))
-                    .border(1.dp, Ygg.Gold, CutCornerShape(m * 0.3f)),
+                    .border(1.dp, Dusk.gold, CutCornerShape(m * 0.3f)),
                 contentAlignment = Alignment.Center,
             ) { RuneGlyph(rune, m * 0.62f, Ygg.GoldHi) }
         }

@@ -71,14 +71,14 @@ fun SkyCardView() {
         Modifier.fillMaxSize()
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(Ygg.Night2, Ygg.Night)), shape)
-            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), shape)
+            .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), shape)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val n = now
         Box(
             Modifier.fillMaxHeight().aspectRatio(1f).clip(CircleShape)
-                .background(Ygg.Iron, CircleShape).border(2.dp, Ygg.Gold, CircleShape),
+                .background(Ygg.Iron, CircleShape).border(2.dp, Dusk.gold, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(Modifier.fillMaxSize().padding(9.dp)) { drawSky(n?.sky ?: Weather.Sky.CLOUDY, n?.isDay ?: true) }

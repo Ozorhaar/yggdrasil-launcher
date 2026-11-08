@@ -4,6 +4,9 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -29,13 +32,37 @@ import kotlinx.coroutines.withContext
 /** What the dock knows about the two doors (null = not read yet / HA unreachable). */
 class GateStates {
     val state = mutableStateMapOf<Gate, String>()
+    /** When each door was first seen in its current state (for "open more than 10 minutes"). */
+    private val since = HashMap<Gate, Long>()
+    /** Bumped on every read, so the night-watch check re-runs. */
+    var readAt by androidx.compose.runtime.mutableLongStateOf(0L)
+
     fun of(g: Gate): String? = state[g]
+
+    fun put(g: Gate, s: String) {
+        if (state[g] != s) since[g] = System.currentTimeMillis()
+        state[g] = s
+    }
+
+    /**
+     * Night watch: the garage open more than 10 minutes, or the side door unlocked between
+     * 10 pm and 6 am. The mark pulses ember while this holds.
+     */
+    fun alert(g: Gate, now: Long = System.currentTimeMillis()): Boolean {
+        val s = state[g] ?: return false
+        if (!isOpen(s)) return false
+        return when (g) {
+            Gate.GARAGE -> now - (since[g] ?: now) >= 10 * 60 * 1000L
+            Gate.SIDE_DOOR -> java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY).let { it >= 22 || it < 6 }
+        }
+    }
 }
 
 private fun Context.readGates(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
-    Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.state[g] = it } }
+    Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.put(g, it) } }
+    into.readAt = System.currentTimeMillis()
 }
 
 /** The doors' states, read when the home screen shows and every 30 seconds while it does. */
@@ -77,6 +104,7 @@ fun gateTap(ctx: Context, scope: CoroutineScope, gates: GateStates, g: Gate) {
                 open -> "opening"
                 else -> "closing"
             }
+            if (ok) Carved.play(ctx, if (open) Carved.Sound.OPEN else Carved.Sound.SECURE)
             Toast.makeText(ctx, if (ok) "${g.label}: $verb" else "Couldn't reach Home Assistant", Toast.LENGTH_SHORT).show()
             // follow the door until it settles
             repeat(8) {
@@ -102,8 +130,11 @@ fun gateTap(ctx: Context, scope: CoroutineScope, gates: GateStates, g: Gate) {
 
 /** The side door's mark: an arched plank door, barred across when locked; unbarred, ring showing, when not. */
 @Composable
-fun SideDoorGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifier) {
-    val c = gateColor(state)
+fun SideDoorGem(state: String?, alert: Boolean = false, modifier: Modifier = Modifier) {
+    val pulse = pulseAlpha(alert)
+    DockGem(modifier) {
+    val base = gateColor(state)
+    val c = base.copy(alpha = base.alpha * pulse)
     val w = size.width; val h = size.height
     val sw = 1.4.dp.toPx()
     val dw = h * 0.62f; val l = w / 2 - dw / 2; val r = w / 2 + dw / 2; val top = h * 0.06f; val ar = dw / 2
@@ -128,11 +159,15 @@ fun SideDoorGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifie
             drawLine(c, Offset(x, y - h * 0.14f), Offset(x, y + h * 0.14f), sw * 0.8f, StrokeCap.Round)
     }
 }
+}
 
 /** The garage's mark: a boathouse (naust) with a horned gable; plank doors when closed, a dragon prow when open. */
 @Composable
-fun GarageGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifier) {
-    val c = gateColor(state)
+fun GarageGem(state: String?, alert: Boolean = false, modifier: Modifier = Modifier) {
+    val pulse = pulseAlpha(alert)
+    DockGem(modifier) {
+    val base = gateColor(state)
+    val c = base.copy(alpha = base.alpha * pulse)
     val w = size.width; val h = size.height
     val sw = 1.4.dp.toPx()
     val half = h * 0.62f; val l = w / 2 - half; val r = w / 2 + half
@@ -159,10 +194,26 @@ fun GarageGem(state: String?, modifier: Modifier = Modifier) = DockGem(modifier)
         }
     }
 }
+}
 
 private fun gateColor(state: String?): Color = when {
     isSecure(state) -> Ygg.Frost
     isOpen(state) -> Ygg.Ember
     state == null -> Ygg.Frost.copy(alpha = 0.45f)
     else -> Ygg.Ash // moving, jammed or unknown
+}
+
+/** 1 when calm; a slow ember breath (0.35..1) while the night watch has something to say. */
+@Composable
+private fun pulseAlpha(alert: Boolean): Float {
+    if (!alert) return 1f
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "watch")
+    val a by t.animateFloat(
+        initialValue = 0.35f, targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween<Float>(1100), androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "watch-alpha",
+    )
+    return a
 }

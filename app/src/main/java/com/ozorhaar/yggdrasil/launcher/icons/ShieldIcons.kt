@@ -31,7 +31,7 @@ class ShieldIcons(
     fun get(app: AppEntry): ImageBitmap {
         // Keyed by the installed copy too (its path changes on every update), so an app that
         // changes its icon gets a freshly carved shield instead of the one cached before.
-        val k = app.key + "@" + (app.info?.applicationInfo?.sourceDir ?: "")
+        val k = app.key + "@" + (app.info?.applicationInfo?.sourceDir ?: "") + (if (com.ozorhaar.yggdrasil.launcher.ui.Dusk.night) "#night" else "")
         return cache.get(k) ?: render(app).also { cache.put(k, it) }
     }
 
@@ -42,7 +42,7 @@ class ShieldIcons(
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         val cx = s / 2f
-        val fill = GOLD
+        val fill = com.ozorhaar.yggdrasil.launcher.ui.Dusk.goldInt
         val accent = Glyphs.accent(app) ?: ACCENTS[abs(app.packageName.hashCode()) % ACCENTS.size]
 
         val p = Paint(Paint.ANTI_ALIAS_FLAG)

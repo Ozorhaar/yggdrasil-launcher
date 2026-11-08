@@ -85,6 +85,7 @@ fun Modifier.widgetCell(drag: DragState, id: Int, page: Int): Modifier {
 fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
     if (spot.provider == Skald.PROVIDER) { SkaldCard(); return }
     if (spot.provider == SkyCard.PROVIDER) { SkyCardView(); return }
+    if (spot.provider == NornsCard.PROVIDER) { NornsCardView(); return }
     val ctx = LocalContext.current
     val ygg = ctx.ygg
     val info = remember(spot.id) { runCatching { ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
@@ -103,7 +104,7 @@ fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
         Modifier.fillMaxSize()
             .clip(frame)
             .background(Ygg.Night, frame)
-            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), frame)
+            .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), frame)
             .padding(3.dp)
             .clip(CutCornerShape(12.dp)),
     ) { AndroidView(
@@ -143,6 +144,7 @@ fun WidgetPicker(
     onPickShortcut: (android.content.pm.LauncherActivityInfo) -> Unit,
     onPickSkald: () -> Unit,
     onPickSky: () -> Unit,
+    onPickNorns: () -> Unit,
     onClose: () -> Unit,
 ) {
     val ctx = LocalContext.current
@@ -237,6 +239,24 @@ fun WidgetPicker(
                     }
                 }
             }
+            if (query.isBlank() || "norns calendar events nine agenda yggdrasil".looselyHas(query)) {
+                item(key = NornsCard.PROVIDER) {
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onPickNorns() }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.width(120.dp).height(52.dp)) {
+                            NornsCardView()
+                            Box(Modifier.matchParentSize().clickable { onPickNorns() })
+                        }
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Norns: calendar", style = TextStyle(color = Ygg.Bone, fontSize = 16.sp))
+                            Text("${NornsCard.WIDTH} × ${NornsCard.HEIGHT} · what's next in your Nine calendar", style = TextStyle(color = Ygg.Ash, fontSize = 13.sp))
+                        }
+                    }
+                }
+            }
             var lastApp = ""
             shown.forEach { row ->
                 if (row.app != lastApp) {
@@ -322,6 +342,7 @@ fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onW
         when {
             spot.provider == Skald.PROVIDER -> "Skald (now playing)"
             spot.provider == SkyCard.PROVIDER -> "Sky (weather)"
+            spot.provider == NornsCard.PROVIDER -> "Norns (calendar)"
             else -> info?.loadLabel(ctx.packageManager) ?: "Widget"
         }
     }

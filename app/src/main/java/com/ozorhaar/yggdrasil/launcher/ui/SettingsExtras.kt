@@ -202,6 +202,7 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
                 val (oldIds, missing) = layout.importJson(JSONObject(text)) { provider ->
                     if (provider == Skald.PROVIDER) return@importJson Skald.ID
                     if (provider == SkyCard.PROVIDER) return@importJson SkyCard.ID
+                    if (provider == NornsCard.PROVIDER) return@importJson NornsCard.ID
                     val cn = ComponentName.unflattenFromString(provider) ?: return@importJson null
                     val id = ygg.widgetHost.allocateAppWidgetId()
                     if (ygg.widgetManager.bindAppWidgetIdIfAllowed(id, cn)) id

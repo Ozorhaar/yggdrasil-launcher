@@ -122,7 +122,7 @@ fun SkaldCard() {
         Modifier.fillMaxSize()
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(Ygg.Night2, Ygg.Night)), shape)
-            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.85f), shape)
+            .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), shape)
             .clickable { open(ctx, now.controller) }
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -132,7 +132,7 @@ fun SkaldCard() {
             Modifier.fillMaxHeight().aspectRatio(1f)
                 .clip(CircleShape)
                 .background(Ygg.Iron, CircleShape)
-                .border(2.5.dp, Ygg.Gold, CircleShape),
+                .border(2.5.dp, Dusk.gold, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             val art = now.art
@@ -142,7 +142,7 @@ fun SkaldCard() {
                     modifier = Modifier.fillMaxSize().padding(2.5.dp).clip(CircleShape),
                 )
             } else {
-                Text("ᛋ", style = TextStyle(color = Ygg.Gold, fontSize = 26.sp))
+                Text("ᛚ", style = TextStyle(color = Dusk.gold, fontSize = 26.sp))
             }
         }
         Spacer(Modifier.width(12.dp))

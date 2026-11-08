@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- fingerprint for locked apps, folders and hidden apps (Android's own prompt) -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Norns card: reads your Nine calendar from the phone's calendar store (read only) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- optional: people in search; only asked for if you turn it on, and they never leave the phone -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 

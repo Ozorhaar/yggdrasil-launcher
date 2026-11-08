@@ -184,6 +184,8 @@ fun LauncherRoot() {
     var sideDoorRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var garageRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val gates = rememberGates()
+    DuskClock()
+    LaunchedEffect(Unit) { Carved.warm(ctx) }
     val bridge by rememberBridge()
     val bridgeScope = rememberCoroutineScope()
     val rootSize = remember { IntArray(2) }
@@ -259,7 +261,8 @@ fun LauncherRoot() {
 
     /** Opens a folder, asking for your fingerprint first if it's locked. */
     fun showFolder(f: Folder) {
-        if (f.locked) Guard.check(ctx, "Open ${f.name}") { openFolder = f.id } else openFolder = f.id
+        if (f.locked) Guard.check(ctx, "Open ${f.name}") { Carved.play(ctx, Carved.Sound.FOLDER); openFolder = f.id }
+        else { Carved.play(ctx, Carved.Sound.FOLDER); openFolder = f.id }
     }
 
     // ---------------------------------------------------------- widgets
@@ -687,6 +690,13 @@ fun LauncherRoot() {
                         scope.launch { delay(50); pager.animateScrollToPage(page) }
                     } else Toast.makeText(ctx, "The Sky is already on your home screen", Toast.LENGTH_SHORT).show()
                 },
+                onPickNorns = {
+                    widgetPicker = false
+                    if (layout.widgets.none { it.provider == NornsCard.PROVIDER }) {
+                        val page = layout.addWidget(NornsCard.ID, NornsCard.PROVIDER, NornsCard.WIDTH, NornsCard.HEIGHT, pager.currentPage)
+                        scope.launch { delay(50); pager.animateScrollToPage(page) }
+                    } else Toast.makeText(ctx, "The Norns are already on your home screen", Toast.LENGTH_SHORT).show()
+                },
                 onClose = { widgetPicker = false },
             )
         }
@@ -874,7 +884,7 @@ private fun Dock(
                 .fillMaxWidth()
                 .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
                 .then(
-                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Ygg.Gold).padding(horizontal = 12.dp, vertical = 14.dp)
+                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold).padding(horizontal = 12.dp, vertical = 14.dp)
                     else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
                 ),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -902,10 +912,12 @@ private fun Dock(
                             layout.dock.lastIndex -> HafnirGem(Modifier.onGloballyPositioned { onHafnirPlaced(it.boundsInRoot()) })
                             1 -> if (gates != null && layout.dock.size >= 5 && homeLinked) SideDoorGem(
                                 gates.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR),
+                                gates.alert(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR, gates.readAt.coerceAtLeast(System.currentTimeMillis())),
                                 Modifier.onGloballyPositioned { onSideDoorPlaced(it.boundsInRoot()) },
                             )
                             3 -> if (gates != null && layout.dock.size >= 5 && homeLinked) GarageGem(
                                 gates.of(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE),
+                                gates.alert(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE, gates.readAt.coerceAtLeast(System.currentTimeMillis())),
                                 Modifier.onGloballyPositioned { onGaragePlaced(it.boundsInRoot()) },
                             )
                         }

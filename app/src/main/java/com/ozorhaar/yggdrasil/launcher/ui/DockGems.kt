@@ -25,7 +25,7 @@ fun DockGem(modifier: Modifier = Modifier, draw: DrawScope.() -> Unit) {
         modifier
             .size(width = 46.dp, height = 24.dp)
             .background(Ygg.Night, RoundedCornerShape(12.dp))
-            .border(1.dp, Ygg.Gold.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+            .border(1.dp, Dusk.gold.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
             .padding(horizontal = 7.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
