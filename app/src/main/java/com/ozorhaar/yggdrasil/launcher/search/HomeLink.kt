@@ -186,6 +186,11 @@ class HomeLink(context: Context) {
                 id == Gate.GARAGE.entityId -> garage = st == "open" || st == "opening"
                 id == Gate.SIDE_DOOR.entityId -> door = st == "unlocked" || st == "open"
                 id in HEARTH_KEEPERS && st == "home" -> hearth = true
+                // a smaller zone inside home (like Driveway Exit) shows as the person's state,
+                // but Home Assistant still lists them in the home zone
+                id == "zone.home" -> o.optJSONObject("attributes")?.optJSONArray("persons")?.let { ps ->
+                    for (j in 0 until ps.length()) if (ps.optString(j) in HEARTH_KEEPERS) hearth = true
+                }
                 id == SOLAR -> solar = st.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
             }
         }
