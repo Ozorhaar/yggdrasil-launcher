@@ -490,15 +490,18 @@ class FjordScene(ctx: Context) {
             paint.shader = RadialGradient(hx, hy, 18 * s, intArrayOf(argb((0.35f + 0.5f * dark) * flick, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
             c.drawCircle(hx, hy, 18 * s, paint); paint.shader = null
             paint.color = argb(0.9f * flick, 0xFFECD08F.toInt()); c.drawRect(hx - 6 * s, hy - 1.5f * s, hx + 6 * s, hy + 1.5f * s, paint)
-            val smokeCol = mix(0xFF2E333C.toInt(), 0xFFB4B9C2.toInt(), light * 0.9f + 0.1f)
-            paint.colorFilter = PorterDuffColorFilter(smokeCol, PorterDuff.Mode.SRC_IN)
+            // by day grey smoke; by night pale, starlit smoke, warmed by the fire where it leaves the roof
+            val pale = mix(0xFF7C8496.toInt(), 0xFFB4B9C2.toInt(), light)
+            val strength = 0.42f + 0.28f * dark
             val life = 7000f; val n = 16
             for (i in 0 until n) {
                 val age = (((t + i * life / n) % life) / life)
                 val rise = age * 230 * s
                 val drift = -age * age * 110 * s + sin(age * 7f + i) * 7 * s
                 val rad = (10 + 34 * age) * s
-                paint.alpha = (255 * 0.42f * (1 - age) * (age * 6).coerceAtMost(1f)).toInt()
+                val warm = ((1 - age * 3).coerceAtLeast(0f)) * (0.3f + 0.5f * dark)
+                paint.colorFilter = PorterDuffColorFilter(mix(pale, 0xFFE0703A.toInt(), warm), PorterDuff.Mode.SRC_IN)
+                paint.alpha = (255 * strength * (1 - age) * (age * 6).coerceAtMost(1f)).toInt()
                 rect.set(hx + drift - rad, hy - rise - rad * 0.6f, hx + drift + rad, hy - rise + rad * 0.6f)
                 c.drawBitmap(puff, null, rect, paint)
             }
