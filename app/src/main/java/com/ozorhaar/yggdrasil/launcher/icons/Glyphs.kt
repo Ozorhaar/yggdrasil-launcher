@@ -40,6 +40,7 @@ object Glyphs {
         "com.brave.browser" to Glyph(R.drawable.glyph_helm, EMBER),
         "io.homeassistant.companion.android" to Glyph(R.drawable.glyph_longhouse, BONE),
         "com.sense.androidclient" to Glyph(R.drawable.glyph_mjolnir, FROST),
+        "com.google.android.apps.dynamite" to Glyph(R.drawable.glyph_chat, FROST),
     )
 
     // apps with more than one home-screen entry: matched by the entry's own activity

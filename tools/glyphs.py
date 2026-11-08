@@ -194,10 +194,31 @@ G["mjolnir"] = [("M38,36 L70,36 C71.6,36 72.6,37 72.6,38.6 L72.6,46.4 C72.6,48 7
                  "M56.4,38.4 L49.6,43.2 L53.4,43.6 L51.2,47.4 L58.6,41.8 L54.6,41.4 Z "
                  "M50,56 L58,54.6 L58,56.2 L50,57.6 Z M50,61 L58,59.6 L58,61.2 L50,62.6 Z M50,66 L58,64.6 L58,66.2 L50,67.6 Z", True)]
 
+# Chat (Google Chat): two speaking runestones, rounded tops and tails like speech, one carved with
+# lines of runes, the other with three staves waiting for an answer
+def _speaking_stones():
+    def seg(x0, y0, x1, y1, w):
+        dx, dy = x1 - x0, y1 - y0; n = math.hypot(dx, dy); nx, ny = -dy / n * w / 2, dx / n * w / 2
+        return f"M{x0+nx:.2f},{y0+ny:.2f} L{x1+nx:.2f},{y1+ny:.2f} L{x1-nx:.2f},{y1-ny:.2f} L{x0-nx:.2f},{y0-ny:.2f} Z"
+
+    def stone(x0, y0, x1, y1, tail_left):
+        r = (x1 - x0) / 2
+        top = f"M{x0},{y1} L{x0},{y0+r} A{r},{r} 0 0 1 {x1},{y0+r} L{x1},{y1} "
+        if tail_left:
+            return top + f"L{x0+9},{y1} L{x0-2},{y1+7} L{x0+2},{y1} Z"
+        return top + f"L{x1-2},{y1} L{x1+2},{y1+7} L{x1-9},{y1} Z"
+
+    back = stone(28, 30, 54, 58, True) + " " + seg(33.5, 42, 48.5, 42, 2.2) + " " + seg(33.5, 48, 45, 48, 2.2)
+    front = stone(56, 46, 80, 74, False) + " " + " ".join(seg(x, 58, x, 66, 2.4) for x in (62.6, 68, 73.4))
+    return [(back, True), (front, True)]
+
+
+G["chat"] = _speaking_stones()
+
 FACES = {n: "#C8A25A" for n in G}  # preview only: every shield is gold; Glyphs.kt holds each accent ring
 DESC = {"calendar": "a runestone carved with day-marks and a sun ring", "voicemail": "Gjallarhorn sounding",
         "calculator": "crossed tally sticks", "mail": "a rune-stick letter on a cord", "dice": "two bone dice, rolling the bones",
-        "anvil": "the smith's anvil and hammer", "gallery": "a Gotland picture stone carved with a longship", "helm": "a spangenhelm, for Brave", "assist": "ansuz, the rune of speech, sounding", "longhouse": "a longhouse gable with crossed bargeboards", "mjolnir": "Mjolnir with a lightning bolt"}
+        "anvil": "the smith's anvil and hammer", "gallery": "a Gotland picture stone carved with a longship", "helm": "a spangenhelm, for Brave", "assist": "ansuz, the rune of speech, sounding", "longhouse": "a longhouse gable with crossed bargeboards", "mjolnir": "Mjolnir with a lightning bolt", "chat": "two speaking runestones"}
 
 
 def svg_shield(name, face):
