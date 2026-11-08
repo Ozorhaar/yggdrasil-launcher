@@ -2,6 +2,17 @@ package com.ozorhaar.yggdrasil.launcher.ui
 
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -216,4 +227,77 @@ private fun pulseAlpha(alert: Boolean): Float {
         label = "watch-alpha",
     )
     return a
+}
+
+/**
+ * Look before you open: a long press on a door's mark shows a live still from that door's camera
+ * (refreshed every two seconds), with the same button the mark has: open behind your fingerprint,
+ * or secure straight away.
+ */
+@Composable
+fun CameraPeek(g: Gate, gates: GateStates, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var frame by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    var trouble by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(g) {
+        owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                val bytes = withContext(Dispatchers.IO) { runCatching { ctx.ygg.homeLink.gateSnapshot(g) } }
+                bytes.onSuccess { b ->
+                    android.graphics.BitmapFactory.decodeByteArray(b, 0, b.size)?.let { frame = it.asImageBitmap(); trouble = null }
+                }.onFailure { trouble = "Couldn't reach the camera" }
+                withContext(Dispatchers.IO) { ctx.readGates(gates) }
+                delay(2000L)
+            }
+        }
+    }
+    val state = gates.of(g)
+    val action = when {
+        isSecure(state) -> if (g == Gate.SIDE_DOOR) "Unlock" else "Open"
+        isOpen(state) -> if (g == Gate.SIDE_DOOR) "Lock" else "Close"
+        else -> null
+    }
+    androidx.compose.foundation.layout.Box(
+        androidx.compose.ui.Modifier.fillMaxSize()
+            .background(Color(0xCC000000))
+            .clickable(interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { onClose() },
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        val shape = androidx.compose.foundation.shape.CutCornerShape(16.dp)
+        androidx.compose.foundation.layout.Column(
+            androidx.compose.ui.Modifier.fillMaxWidth().padding(16.dp)
+                .background(Ygg.Night2, shape)
+                .border(1.5.dp, Dusk.gold, shape)
+                .clickable(interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                .padding(14.dp),
+        ) {
+            androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                RuneText(g.label, 22.sp, Ygg.GoldHi)
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.weight(1f))
+                RuneText(state ?: "…", 16.sp, gateColor(state))
+            }
+            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(10.dp))
+            androidx.compose.foundation.layout.Box(
+                androidx.compose.ui.Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                    .clip(androidx.compose.foundation.shape.CutCornerShape(10.dp))
+                    .background(Ygg.Night, androidx.compose.foundation.shape.CutCornerShape(10.dp))
+                    .border(1.dp, Dusk.gold.copy(alpha = 0.6f), androidx.compose.foundation.shape.CutCornerShape(10.dp)),
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) {
+                val f = frame
+                if (f != null) androidx.compose.foundation.Image(
+                    f, contentDescription = "${g.label} camera",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                ) else RuneText(trouble ?: "Opening the camera…", 15.sp, Ygg.Ash)
+            }
+            androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+                if (action != null) RuneButton(action) { gateTap(ctx, scope, gates, g) }
+                RuneButton("Done") { onClose() }
+            }
+        }
+    }
 }

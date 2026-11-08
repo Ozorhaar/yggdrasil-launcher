@@ -37,6 +37,10 @@ class FjordScene(ctx: Context) {
 
     var weather: Weather.Now? = Weather.cached(ctx)
 
+    /** What the house is doing, from Home Assistant (null = unknown: the steading is drawn dark). */
+    data class House(val lightsOn: Boolean, val garageOpen: Boolean, val doorUnlocked: Boolean)
+    var house: House? = null
+
     /** Set to start the ~80 s demo that runs through a day and every kind of weather. 0 = off. */
     var demoStart = 0L
 
@@ -284,6 +288,11 @@ class FjordScene(ctx: Context) {
         rect.set(landX, landTop, landX + landW, landBot)
         c.drawBitmap(land, null, rect, paint)
 
+        // the steading on the far shore: a longhouse (windows lit while the house lights are on,
+        // its door glowing ember while the side door is unlocked) and a boathouse with a lantern
+        // that burns while the garage is open
+        drawSteading(c, ox, oy, s, par, hz, light, p.dark)
+
         // longship, its reflection and the ripples
         val sl = lerp(1.15f, 0.65f, p.dark)
         paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
@@ -298,6 +307,59 @@ class FjordScene(ctx: Context) {
         if (precip > 0) drawPrecip(c, w, h, dt, t, precip, skyKind == Weather.Sky.SNOW, light)
 
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
+    }
+
+    private fun drawSteading(c: Canvas, ox: Float, oy: Float, s: Float, par: Float, hz: Float, light: Float, dark: Float) {
+        val h = house
+        fun ax(x: Float) = ox + x * s * 1.04f - 1440 * s * 0.02f + par
+        val base = hz + 1 * s
+        val wall = mix(0xFF141820.toInt(), 0xFF4B4A4C.toInt(), light)
+        val roof = mix(0xFF0E1118.toInt(), 0xFF3A3A3E.toInt(), light)
+        paint.reset(); paint.isAntiAlias = true
+        val path = android.graphics.Path()
+
+        // longhouse: long low walls, a deep turf roof and crossed gable boards at each end
+        val l = ax(1170f); val r = ax(1330f); val wallTop = base - 22 * s; val ridge = base - 52 * s
+        paint.color = wall; c.drawRect(l, wallTop, r, base, paint)
+        path.reset(); path.moveTo(l - 10 * s, wallTop + 2 * s); path.lineTo(l + 24 * s, ridge); path.lineTo(r - 24 * s, ridge)
+        path.lineTo(r + 10 * s, wallTop + 2 * s); path.close()
+        paint.color = roof; c.drawPath(path, paint)
+        paint.strokeWidth = 3.2f * s; paint.strokeCap = Paint.Cap.ROUND; paint.style = Paint.Style.STROKE
+        for (x in listOf(l + 24 * s, r - 24 * s)) {
+            c.drawLine(x - 10 * s, ridge + 9 * s, x + 7 * s, ridge - 10 * s, paint)
+            c.drawLine(x + 10 * s, ridge + 9 * s, x - 7 * s, ridge - 10 * s, paint)
+        }
+        paint.style = Paint.Style.FILL
+
+        // boathouse (naust) down by the water, a little in front
+        val bl = ax(1352f); val br = ax(1420f); val bTop = base - 18 * s; val bRidge = base - 40 * s
+        path.reset(); path.moveTo(bl, base + 2 * s); path.lineTo(bl, bTop); path.lineTo((bl + br) / 2, bRidge); path.lineTo(br, bTop); path.lineTo(br, base + 2 * s); path.close()
+        paint.color = roof; c.drawPath(path, paint)
+
+        // the lights
+        val night = 0.35f + 0.65f * dark   // lights read stronger after dark
+        if (h?.lightsOn == true) {
+            val warm = 0xFFF0C070.toInt()
+            val wy = base - 13 * s
+            for (i in 0 until 4) {
+                val wx = l + (24 + i * 34) * s
+                paint.shader = RadialGradient(wx, wy, 16 * s, intArrayOf(argb(0.55f * night, warm), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(wx, wy, 16 * s, paint); paint.shader = null
+                paint.color = argb(0.95f * night, warm)
+                c.drawRect(wx - 3.5f * s, wy - 4 * s, wx + 3.5f * s, wy + 4 * s, paint)
+            }
+        }
+        // the side door, mid-wall: dark when barred, ember when unlocked
+        val dx = (l + r) / 2
+        paint.color = if (h?.doorUnlocked == true) argb(0.9f * night + 0.1f, 0xFFE0703A.toInt()) else mix(roof, 0xFF000000.toInt(), 0.4f)
+        c.drawRect(dx - 5 * s, base - 16 * s, dx + 5 * s, base, paint)
+        // the garage lantern at the boathouse
+        if (h?.garageOpen == true) {
+            val lx = br + 6 * s; val ly = base - 14 * s
+            paint.shader = RadialGradient(lx, ly, 26 * s, intArrayOf(argb(0.7f * night + 0.2f, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(lx, ly, 26 * s, paint); paint.shader = null
+            paint.color = argb(1f, 0xFFECD08F.toInt()); c.drawCircle(lx, ly, 3.2f * s, paint)
+        }
     }
 
     private fun drawAurora(c: Canvas, w: Int, h: Int, t: Float, a: Float, par: Float) {

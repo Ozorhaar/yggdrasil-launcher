@@ -209,6 +209,15 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
                     else { runCatching { ygg.widgetHost.deleteAppWidgetId(id) }; null }
                 }
                 oldIds.forEach { id -> ygg.widgetViews.remove(id); if (id >= 0) runCatching { ygg.widgetHost.deleteAppWidgetId(id) } }
+                // the hidden watch widget (on-call rune) comes back too
+                JSONObject(text).optString("watch").takeIf { it.isNotBlank() }?.let { provider ->
+                    ComponentName.unflattenFromString(provider)?.let { cn ->
+                        val id = ygg.widgetHost.allocateAppWidgetId()
+                        if (ygg.widgetManager.bindAppWidgetIdIfAllowed(id, cn))
+                            ygg.watch.set(id, provider) { wid -> runCatching { ygg.widgetManager.getAppWidgetInfo(wid) }.getOrNull() }
+                        else runCatching { ygg.widgetHost.deleteAppWidgetId(id) }
+                    }
+                }
                 if (missing.isEmpty()) "Layout restored"
                 else "Layout restored. Add these widgets again: " + missing.joinToString { it.substringBefore('/').substringAfterLast('.') }
             }.getOrElse { "Restore failed: ${it.message}" }
@@ -223,6 +232,21 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
         Spacer(Modifier.width(8.dp))
         RuneButton("Restore from a file") {
             Guard.check(ctx, "Restore a layout", fresh = true) { opener.launch(arrayOf("application/json", "text/plain", "*/*")) }
+        }
+    }
+    // the Hoard: nightly, encrypted to the Mac's own key
+    Spacer(Modifier.height(6.dp))
+    val last = remember { mutableStateOf(com.ozorhaar.yggdrasil.launcher.hoard.Hoard.last(ctx)) }
+    RuneText(
+        if (last.value == 0L) "Nightly backup to the Mac: not yet"
+        else "Last backup to the Mac: " + java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(last.value)),
+        13.sp, Ygg.Ash,
+    )
+    RuneButton("Back up to the Mac now") {
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { com.ozorhaar.yggdrasil.launcher.hoard.Hoard.sendNow(ctx) }
+            last.value = com.ozorhaar.yggdrasil.launcher.hoard.Hoard.last(ctx)
+            Toast.makeText(ctx, r, Toast.LENGTH_LONG).show()
         }
     }
 }

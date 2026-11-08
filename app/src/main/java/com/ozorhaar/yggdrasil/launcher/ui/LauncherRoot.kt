@@ -184,6 +184,8 @@ fun LauncherRoot() {
     var sideDoorRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var garageRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val gates = rememberGates()
+    val homeLinkReady = ygg.homeLink.configured
+    var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate?>(null) }
     DuskClock()
     LaunchedEffect(Unit) { Carved.warm(ctx) }
     val bridge by rememberBridge()
@@ -236,6 +238,7 @@ fun LauncherRoot() {
 
     BackHandler(enabled = true) {
         when {
+            peekGate != null -> peekGate = null
             menu != null -> menu = null
             widgetMenu != null -> widgetMenu = null
             homeMenu -> homeMenu = false
@@ -441,7 +444,7 @@ fun LauncherRoot() {
         }
     }
 
-    val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null ||
+    val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null || peekGate != null ||
         homeMenu || widgetPicker || widgetMenu != null
 
     Box(
@@ -547,6 +550,17 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
+                        // hold a door's mark: look through its camera first
+                        if (homeLinkReady && sideDoorRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.SIDE_DOOR
+                            return@detectTapGestures
+                        }
+                        if (homeLinkReady && garageRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            peekGate = com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE
+                            return@detectTapGestures
+                        }
                         // hold the bridge mark: lower or raise the bridge
                         val b = bridge
                         if (b != null && bridgeRect.inflate(12f).contains(p)) {
@@ -700,6 +714,7 @@ fun LauncherRoot() {
                 onClose = { widgetPicker = false },
             )
         }
+        peekGate?.let { g -> CameraPeek(g, gates) { peekGate = null } }
         widgetMenu?.let { id -> layout.widgets.firstOrNull { it.id == id } }?.let { spot ->
             WidgetSheet(
                 spot, layout,

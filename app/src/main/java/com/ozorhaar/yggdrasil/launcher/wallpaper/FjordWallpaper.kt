@@ -32,6 +32,7 @@ class FjordWallpaper : WallpaperService() {
         private var height = 0
         private var xOffset = 0.5f
         private var lastWeather = 0L
+        private var lastHouse = 0L
         private val tick = Runnable { drawFrame() }
         private val prefs by lazy { applicationContext.getSharedPreferences("weather", MODE_PRIVATE) }
         /** The launcher's "Show me the sky" button writes a start time here. */
@@ -65,6 +66,8 @@ class FjordWallpaper : WallpaperService() {
 
         override fun onVisibilityChanged(v: Boolean) {
             visible = v
+            // coming back into view: read the house again (at most every 30 s)
+            if (v && System.currentTimeMillis() - lastHouse > 30_000L) lastHouse = 0L
             if (v) drawFrame() else handler.removeCallbacks(tick)
         }
 
@@ -107,6 +110,24 @@ class FjordWallpaper : WallpaperService() {
             }
         }
 
+        /** The steading on the shore follows the house: read from Home Assistant every 2 minutes while seen. */
+        private fun refreshHouse() {
+            val now = System.currentTimeMillis()
+            if (now - lastHouse < 2 * 60_000L) return
+            lastHouse = now
+            val link = (applicationContext as com.ozorhaar.yggdrasil.launcher.YggApp).homeLink
+            if (!link.configured) return
+            thread {
+                val h = runCatching { link.glance() }.getOrNull() ?: return@thread
+                handler.post {
+                    if (scene?.house != h) {
+                        scene?.house = h
+                        if (visible) drawFrame()
+                    }
+                }
+            }
+        }
+
         private fun drawFrame() {
             handler.removeCallbacks(tick)
             val sc = scene ?: return
@@ -120,6 +141,7 @@ class FjordWallpaper : WallpaperService() {
                 if (c != null) runCatching { holder.unlockCanvasAndPost(c) }
             }
             refreshWeather()
+            refreshHouse()
             handler.postDelayed(tick, if (sc.animating) 66L else 60_000L)
         }
     }

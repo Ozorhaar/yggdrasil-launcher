@@ -144,14 +144,44 @@ class HomeLink(context: Context) {
      * only things on the phone that may ever unlock or open, and the dock asks for your fingerprint
      * (always fresh) before it calls [setGate] with open = true. Hafnir and search stay one-way.
      */
-    enum class Gate(val entityId: String, val label: String) {
-        SIDE_DOOR("lock.side_door_2", "Side door"),
-        GARAGE("cover.garage_rat_door", "Garage door"),
+    enum class Gate(val entityId: String, val label: String, val camera: String) {
+        SIDE_DOOR("lock.side_door_2", "Side door", "camera.frigate_side_doorbell"),
+        GARAGE("cover.garage_rat_door", "Garage door", "camera.frigate_driveway"),
+    }
+
+    /** A still from the door's camera (JPEG bytes), through Home Assistant's camera proxy. Blocking. */
+    fun gateSnapshot(g: Gate): ByteArray {
+        val c = URL(url + "/api/camera_proxy/" + g.camera).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 4000; c.readTimeout = 8000; c.instanceFollowRedirects = false
+            c.setRequestProperty("Authorization", "Bearer ${token()}")
+            val code = c.responseCode
+            if (code !in 200..299) error("Camera answered $code")
+            return c.inputStream.use { it.readBytes() }
+        } finally {
+            c.disconnect()
+        }
     }
 
     /** The door's state as HA reports it (locked/unlocked/open/closed/opening/...). Blocking. */
     fun gateState(g: Gate): String =
         JSONObject(request(url, token(), "GET", "/api/states/${g.entityId}", null)).optString("state")
+
+    /** One read of the house for the wallpaper: any light on, garage open, side door unlocked. Blocking. */
+    fun glance(): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House {
+        val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
+        var lights = false; var garage = false; var door = false
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            val id = o.optString("entity_id"); val st = o.optString("state")
+            when {
+                id.startsWith("light.") && st == "on" -> lights = true
+                id == Gate.GARAGE.entityId -> garage = st == "open" || st == "opening"
+                id == Gate.SIDE_DOOR.entityId -> door = st == "unlocked" || st == "open"
+            }
+        }
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door)
+    }
 
     /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */
     fun setGate(g: Gate, open: Boolean) {

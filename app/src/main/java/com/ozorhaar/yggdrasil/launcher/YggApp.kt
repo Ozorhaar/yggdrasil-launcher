@@ -52,6 +52,7 @@ class YggApp : Application() {
         repo.start()
         if (!layout.initialized) seedDefaultLayout()
         seedWallpapersOnce()
+        com.ozorhaar.yggdrasil.launcher.hoard.Hoard.schedule(this)
     }
 
     /** First run: Fjord on the home screen, World Tree on the lock screen. */

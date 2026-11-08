@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- keeps the nightly layout backup (the Hoard) scheduled after a restart -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- in-app updates: Android still asks you to confirm every install -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- fingerprint for locked apps, folders and hidden apps (Android's own prompt) -->
@@ -86,6 +88,12 @@
         </receiver>
 
         <!-- The living fjord wallpaper. -->
+        <!-- The Hoard: the nightly encrypted layout backup to the Mac mini -->
+        <service
+            android:name=".hoard.HoardJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <service
             android:name=".wallpaper.FjordWallpaper"
             android:exported="true"
