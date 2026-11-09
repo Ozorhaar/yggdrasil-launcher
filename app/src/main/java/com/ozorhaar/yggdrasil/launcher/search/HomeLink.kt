@@ -357,6 +357,12 @@ class HomeLink(context: Context) {
         cachedAt = 0L
     }
 
+    /**
+     * Whether Home Assistant answers, asked properly with the token (an unauthenticated request
+     * counts as a failed login and five of those get the house's IP banned). Blocking.
+     */
+    fun alive(): Boolean = configured && runCatching { request(url, token(), "GET", "/api/", null).contains("API running") }.getOrDefault(false)
+
     /** The house's latitude/longitude from Home Assistant's config, or null if not connected. Blocking. */
     fun homeLocation(): Pair<Double, Double>? = runCatching {
         if (!configured) return null

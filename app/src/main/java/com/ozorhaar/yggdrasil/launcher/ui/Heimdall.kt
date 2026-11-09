@@ -43,7 +43,8 @@ import java.net.URL
 /**
  * Heimdall's watch: the guardian of the Bifrost keeps an eye on the homelab. Every two minutes
  * while the home screen shows, the phone asks each service whether it answers (any reply counts,
- * even a login page; nothing is sent but the request itself). Gjallarhorn, carved at the foot of
+ * even a login page; nothing is sent but the request itself). Home Assistant is asked with the
+ * launcher's token, since it bans an address after a few unauthenticated requests. Gjallarhorn, carved at the foot of
  * the dock's rune band, shows frost while all is well, ember when something has fallen, and dims
  * when none of it can be seen (away from home, where nothing on ozorhaar.com is reachable).
  */
@@ -85,9 +86,10 @@ object Heimdall {
 
     /** Asks every post at once. Call off the main thread. */
     suspend fun look(ctx: Context): Report = coroutineScope {
-        val ha = ctx.ygg.homeLink.url.takeIf { it.startsWith("https://") }
-        val posts = listOfNotNull(
-            ha?.let { "Home Assistant" to "$it/api/" },
+        val link = ctx.ygg.homeLink
+        // Home Assistant is asked with the token, never without (that would count as a failed login)
+        val haCheck = if (link.configured) async(Dispatchers.IO) { Post("Home Assistant", link.alive()) } else null
+        val posts = listOf(
             "Frigate" to "https://frigate.ozorhaar.com/api/version",
             "Proxmox" to "https://prox.ozorhaar.com/",
             "NAS" to "https://nas.ozorhaar.com/",
@@ -95,7 +97,7 @@ object Heimdall {
         )
         val checks = posts.map { (name, url) -> async(Dispatchers.IO) { Post(name, answers(url)) } }
         val internet = Post(INTERNET, online(ctx))
-        Report(listOf(internet) + checks.awaitAll(), System.currentTimeMillis())
+        Report(listOf(internet) + listOfNotNull(haCheck?.await()) + checks.awaitAll(), System.currentTimeMillis())
     }
 }
 
