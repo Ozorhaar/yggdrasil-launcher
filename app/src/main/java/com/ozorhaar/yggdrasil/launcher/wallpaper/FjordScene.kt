@@ -46,16 +46,20 @@ private const val SHELF_FULL = 1084
 private const val HALL_L = 1118f
 private const val HALL_R = 1402f
 /**
- * Where the water meets the hull in the longship bitmap. The ship is cut here (the keel's lowest
- * curve is under water) and mirrored about this one line, as flat water does.
+ * The longship layer: yggdrasil-os tools/art.py fjord_layers(1440, 3120, afloat=True, live=True),
+ * the same ship as Windows and Yggdrasil OS (Geri at the bow, Freki at the stern), cropped to rows
+ * [SHIP_TOP, SHIP_TOP + SHIP_WL) of the 1440 x 3120 art. The hull sits in the water at the bitmap's
+ * foot (the horizon line); the scene draws its reflection and oars.
  */
-private const val SHIP_WL = 370
-/** The oar ports along the hull (art row), and how far in front of the hull the blades meet the water. */
-private const val OAR_PORT = 344; private const val OAR_REACH = 42
+private const val SHIP_TOP = 1560
+private const val SHIP_WL = 375
+/** The oar ports along the hull (bitmap row, first x and spacing), and how far in front of the hull the blades meet the water. */
+private const val OAR_PORT = 356; private const val OAR_X0 = 335.5f; private const val OAR_DX = 62.9f
+private const val OAR_REACH = 42
 /** The sail's mesh for the wind. */
 private const val SAIL_COLS = 10; private const val SAIL_ROWS = 8
 /** The sail on the longship bitmap (its own pixels). */
-private const val SAIL_L = 448; private const val SAIL_T = 40; private const val SAIL_R = 766; private const val SAIL_B = 284
+private const val SAIL_L = 389; private const val SAIL_T = 34; private const val SAIL_R = 763; private const val SAIL_B = 312
 /** Solar output (W) at which the sail burns brightest. */
 private const val SOLAR_FULL_W = 7000f
 
@@ -177,11 +181,9 @@ class FjordScene(ctx: Context) {
     init {
         val art = decode(ctx, R.drawable.fjord_ship)
         sail = sailMask(art)
-        val hull = cleanHull(Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL))
-        shipRefl = mirrorShip(hull)
+        shipRefl = mirrorShip(art)
         // the cloth is lifted out of the ship and drawn on its own, so the wind can shape it
-        ship = cutSail(hull, sail)
-        if (hull !== art) art.recycle()
+        ship = cutSail(art, sail)
     }
     private val ray: Bitmap = auroraRay()
     private val treeLazy = lazy { worldTree() }
@@ -510,9 +512,9 @@ class FjordScene(ctx: Context) {
         val rowing = sailing || ((h0?.exportW ?: 0f) > 150f && cfg(Touch.OARS))
         if (shipOut < 0.995f) {
             val sl = lerp(1.15f, 0.65f, p.dark)
-            val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
+            val shipL = ox - 1440 * s * 0.02f + par; val shipT = oy + SHIP_TOP * s
             // the hull's waterline glides to the fjord's mouth, shrinking with the distance
-            val pivX = shipL + 540 * 1.04f * s; val pivY = shipT + SHIP_WL * s
+            val pivX = shipL + 598 * 1.04f * s; val pivY = shipT + SHIP_WL * s
             val u = shipOut * shipOut * (3 - 2 * shipOut)
             val k = 1f - 0.9f * u
             val fade = 1f - u * u * u
@@ -529,7 +531,7 @@ class FjordScene(ctx: Context) {
                 paint.shader = RadialGradient(sailRect.centerX(), sailRect.centerY(), r, intArrayOf(argb(0.32f * sun * fade, 0xFFECD08F.toInt()), 0), null, Shader.TileMode.CLAMP)
                 c.drawCircle(sailRect.centerX(), sailRect.centerY(), r, paint); paint.shader = null
             }
-            val shipR = shipL + 1427 * 1.04f * s; val wl = shipT + SHIP_WL * s
+            val shipR = shipL + 1440 * 1.04f * s; val wl = shipT + SHIP_WL * s
             paint.isFilterBitmap = true
             paint.alpha = (255 * fade).toInt()
             // its reflection: hull and sail mirrored at the waterline, dimmer, cooler and rippled
@@ -893,7 +895,7 @@ class FjordScene(ctx: Context) {
         for (refl in listOf(true, false)) {
             paint.color = argb(fade * (if (refl) 0.32f else 1f), wood)
             for (i in 0 until 9) {
-                val px = shipL + (300 + i * 58) * k; val tx = px - 12 * s + sweep
+                val px = shipL + (OAR_X0 + i * OAR_DX) * k; val tx = px - 12 * s + sweep
                 paint.strokeWidth = 3.2f * s
                 c.drawLine(px, y(0f, refl), tx, y(1f, refl), paint)
                 paint.strokeWidth = 7f * s
@@ -901,13 +903,13 @@ class FjordScene(ctx: Context) {
             }
         }
         paint.color = argb(fade, mix(0xFF000000.toInt(), wood, 0.25f))
-        for (i in 0 until 9) c.drawCircle(shipL + (300 + i * 58) * k, wl - hgt, 3f * s, paint)
+        for (i in 0 until 9) c.drawCircle(shipL + (OAR_X0 + i * OAR_DX) * k, wl - hgt, 3f * s, paint)
         val bite = kotlin.math.cos(phase).toFloat()
         if (bite > 0f) {
             paint.color = argb(fade * 0.55f * minOf(1f, bite * 2f), 0xFFDDE6F5.toInt())
             paint.strokeWidth = 1.6f * s
             for (i in 0 until 9) {
-                val tx = shipL + (300 + i * 58) * k - 12 * s + sweep
+                val tx = shipL + (OAR_X0 + i * OAR_DX) * k - 12 * s + sweep
                 c.drawLine(tx - 10 * s, wl + reach + s, tx + 10 * s, wl + reach + s, paint)
             }
         }
@@ -962,47 +964,6 @@ class FjordScene(ctx: Context) {
         return b
     }
 
-
-    /**
-     * Tidies the ship art for real water: clears the old baked reflection's leftovers under the
-     * shields and the faint streaks behind them, paints out the shield smudges in the hull (they
-     * read as a second reflection), and takes off the short oar stubs (the oars are drawn live).
-     */
-    private fun cleanHull(src: Bitmap): Bitmap {
-        val w = src.width; val h = src.height
-        val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
-        src.recycle()
-        fun a(i: Int) = px[i] ushr 24
-        val solid = BooleanArray(w * h) { a(it) >= 200 }
-        for (y in 250 until h) for (x in 0 until w) {
-            val i = y * w + x
-            val al = a(i)
-            if (y >= 341) {
-                if (al < 160) { px[i] = 0; continue }
-                val c = px[i]
-                val lum = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3
-                if (y >= 343 && lum < 52) px[i] = (al shl 24) or 0x090A0D
-            } else if (al < 120) {
-                var near = false
-                loop@ for (dy in -2..2) for (dx in -2..2) {
-                    val yy = y + dy; val xx = x + dx
-                    if (yy in 0 until h && xx in 0 until w && solid[yy * w + xx]) { near = true; break@loop }
-                }
-                if (!near) px[i] = 0
-            }
-        }
-        for (y in 352 until h) {
-            var x = 0
-            while (x < w) {
-                if (a(y * w + x) >= 160) {
-                    val x0 = x
-                    while (x < w && a(y * w + x) >= 160) x++
-                    if (x - x0 < 14) for (xx in x0 until x) px[y * w + xx] = 0
-                } else x++
-            }
-        }
-        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
-    }
 
     /** The ship mirrored about the waterline: fading with depth, cooler, broken by a gentle ripple. */
     private fun mirrorShip(src: Bitmap): Bitmap {
@@ -1068,21 +1029,21 @@ class FjordScene(ctx: Context) {
         val p = android.graphics.Path()
         paint.reset(); paint.isAntiAlias = true
         val wave = sin(t * 0.004f) * 6 * s
-        p.moveTo(x(585f), y(6f))
-        p.quadTo(x(640f), y(10f) + wave, x(700f), y(16f) + wave * 1.4f)
-        p.quadTo(x(640f), y(24f) + wave, x(585f), y(30f))
+        p.moveTo(x(578f), y(10f))
+        p.quadTo(x(633f), y(14f) + wave, x(693f), y(20f) + wave * 1.4f)
+        p.quadTo(x(633f), y(28f) + wave, x(578f), y(34f))
         p.close()
         paint.color = argb(0.95f * fade, 0xFFB0402A.toInt()); c.drawPath(p, paint)
         val cols = intArrayOf(0xFFECD08F.toInt(), 0xFFE0703A.toInt(), 0xFF8FC4E0.toInt())
         for (i in 0 until 7) {
             val f = (i + 0.5f) / 7f
-            val fx = x(585f + (880f - 585f) * f); val fy = y(40f + (140f - 40f) * f)
+            val fx = x(600f + (900f - 600f) * f); val fy = y(28f + (180f - 28f) * f)
             p.reset()
             p.moveTo(fx - 6 * s, fy); p.lineTo(fx + 6 * s, fy); p.lineTo(fx, fy + 13 * s); p.close()
             paint.color = argb(0.95f * fade, cols[i % 3]); c.drawPath(p, paint)
         }
         paint.color = argb(0.6f * fade, 0xFF1C150F.toInt()); paint.strokeWidth = 1.2f * s
-        c.drawLine(x(585f), y(40f), x(880f), y(140f), paint)
+        c.drawLine(x(600f), y(28f), x(900f), y(180f), paint)
     }
 
     /** 21 December, the midwinter solstice (as it falls in North America's eastern time). */
