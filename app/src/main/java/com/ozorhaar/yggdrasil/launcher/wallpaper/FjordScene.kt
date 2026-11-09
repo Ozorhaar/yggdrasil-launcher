@@ -45,10 +45,13 @@ private const val SHELF_FULL = 1084
 /** The longhouse's ends, in the art's coordinates. */
 private const val HALL_L = 1118f
 private const val HALL_R = 1402f
-/** The hull's waterline in the longship bitmap: everything below it is the art's old reflection. */
-private const val SHIP_WL = 386
-/** Where the reflection bitmap starts, in the ship art's rows (just above the highest hull bottom). */
-private const val REFL_TOP = 330
+/**
+ * Where the water meets the hull in the longship bitmap. The ship is cut here (the keel's lowest
+ * curve is under water) and mirrored about this one line, as flat water does.
+ */
+private const val SHIP_WL = 370
+/** The oar ports along the hull (art row), and how far in front of the hull the blades meet the water. */
+private const val OAR_PORT = 344; private const val OAR_REACH = 42
 /** The sail's mesh for the wind. */
 private const val SAIL_COLS = 10; private const val SAIL_ROWS = 8
 /** The sail on the longship bitmap (its own pixels). */
@@ -171,12 +174,10 @@ class FjordScene(ctx: Context) {
     private val ship: Bitmap
     private val sail: Bitmap?
     private val shipRefl: Bitmap
-    /** Each column's hull bottom (where it meets the water), in the ship art's rows; filled in by [keel]. */
-    private var keelRow = IntArray(0)
     init {
         val art = decode(ctx, R.drawable.fjord_ship)
         sail = sailMask(art)
-        val hull = keel(Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL))
+        val hull = cleanHull(Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL))
         shipRefl = mirrorShip(hull)
         // the cloth is lifted out of the ship and drawn on its own, so the wind can shape it
         ship = cutSail(hull, sail)
@@ -511,7 +512,7 @@ class FjordScene(ctx: Context) {
             val sl = lerp(1.15f, 0.65f, p.dark)
             val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
             // the hull's waterline glides to the fjord's mouth, shrinking with the distance
-            val pivX = shipL + 540 * 1.04f * s; val pivY = shipT + 352 * s
+            val pivX = shipL + 540 * 1.04f * s; val pivY = shipT + SHIP_WL * s
             val u = shipOut * shipOut * (3 - 2 * shipOut)
             val k = 1f - 0.9f * u
             val fade = 1f - u * u * u
@@ -533,7 +534,7 @@ class FjordScene(ctx: Context) {
             paint.alpha = (255 * fade).toInt()
             // its reflection: hull and sail mirrored at the waterline, dimmer, cooler and rippled
             paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl * 0.8f, sl * 0.86f, sl * 0.95f, 1f) })
-            rect.set(shipL, shipT + REFL_TOP * s, shipR, shipT + (REFL_TOP + shipRefl.height) * s)
+            rect.set(shipL, wl, shipR, wl + shipRefl.height * s)
             c.drawBitmap(shipRefl, null, rect, paint)
             paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
             rect.set(shipL, shipT, shipR, wl)
@@ -870,49 +871,43 @@ class FjordScene(ctx: Context) {
     }
 
     /**
-     * Oars out of the ports under the shields, down the hull's side to the water, sweeping fore and
-     * aft in a steady stroke: blades dip in on the pull and lift clear on the return, with ripples
-     * where they bite and their reflections below the waterline.
+     * Oars out of the ports along the hull, slanting down to meet the water a little in front of
+     * the ship (lower on screen), sweeping fore and aft: the blades bite on the pull, with a ripple,
+     * and lift clear on the return. Each has its reflection, rising from the blade back toward the hull.
      */
     private fun drawOars(c: Canvas, shipL: Float, shipT: Float, s: Float, t: Float, fade: Float, dark: Float) {
         val k = 1.04f * s
         val wl = shipT + SHIP_WL * s
-        val portY = shipT + 344 * s
+        val hgt = (SHIP_WL - OAR_PORT) * s; val reach = OAR_REACH * s
         paint.reset(); paint.isAntiAlias = true
         paint.strokeCap = Paint.Cap.ROUND
         val wood = mix(0xFF7A5E3C.toInt(), 0xFF2C2219.toInt(), dark)
         val phase = (t * 0.0026f).toDouble()                       // about one stroke every 2.4 s
-        val lean = 0.45f * sin(phase).toFloat()                    // fore and aft, from straight down
-        val dip = (9f * kotlin.math.cos(phase).toFloat() - 1f) * s  // in the water on the pull, clear on the return
-        val tan = kotlin.math.tan(lean.toDouble()).toFloat()
-        fun water(px: Float) = shipT + (keelRow.getOrElse(((px - shipL) / k).toInt().coerceIn(0, keelRow.size - 1)) { SHIP_WL - 1 } + 1) * s
-        for (i in 0 until 9) {
-            val px = shipL + (300 + i * 58) * k
-            val wl = water(px)
-            val ty = wl + dip; val tx = px + tan * (ty - portY)
-            for (mirror in listOf(true, false)) {
-                c.save()
-                if (mirror) { c.clipRect(px - 80 * s, wl, px + 80 * s, wl + 200 * s); c.scale(1f, -1f, 0f, wl) }
-                else c.clipRect(px - 80 * s, shipT, px + 80 * s, wl + 1f * s)
-                paint.color = argb(fade * (if (mirror) 0.35f else 1f), wood)
+        val sweep = 26f * s * sin(phase).toFloat()
+        val lift = maxOf(0f, -kotlin.math.cos(phase).toFloat()) * 9f * s
+        fun y(t0: Float, refl: Boolean): Float {
+            val water = wl + reach * t0; val above = hgt * (1 - t0) + lift * t0
+            return if (refl) water + above else water - above
+        }
+        for (refl in listOf(true, false)) {
+            paint.color = argb(fade * (if (refl) 0.32f else 1f), wood)
+            for (i in 0 until 9) {
+                val px = shipL + (300 + i * 58) * k; val tx = px - 12 * s + sweep
                 paint.strokeWidth = 3.2f * s
-                c.drawLine(px, portY, tx, ty, paint)
+                c.drawLine(px, y(0f, refl), tx, y(1f, refl), paint)
                 paint.strokeWidth = 7f * s
-                c.drawLine(px + (tx - px) * 0.72f, portY + (ty - portY) * 0.72f, tx, ty, paint)
-                c.restore()
+                c.drawLine(px + (tx - px) * 0.7f, y(0.7f, refl), tx, y(1f, refl), paint)
             }
         }
-        // the ports, and ripples where the blades bite
         paint.color = argb(fade, mix(0xFF000000.toInt(), wood, 0.25f))
-        for (i in 0 until 9) c.drawCircle(shipL + (300 + i * 58) * k, portY, 3f * s, paint)
-        if (dip > 0f) {
-            paint.color = argb(fade * 0.5f * (dip / (8f * s)).coerceAtMost(1f), 0xFFDDE6F5.toInt())
+        for (i in 0 until 9) c.drawCircle(shipL + (300 + i * 58) * k, wl - hgt, 3f * s, paint)
+        val bite = kotlin.math.cos(phase).toFloat()
+        if (bite > 0f) {
+            paint.color = argb(fade * 0.55f * minOf(1f, bite * 2f), 0xFFDDE6F5.toInt())
             paint.strokeWidth = 1.6f * s
             for (i in 0 until 9) {
-                val px = shipL + (300 + i * 58) * k
-                val wl = water(px)
-                val tx = px + tan * (wl - portY)
-                c.drawLine(tx - 9 * s, wl + 2 * s, tx + 9 * s, wl + 2 * s, paint)
+                val tx = shipL + (300 + i * 58) * k - 12 * s + sweep
+                c.drawLine(tx - 10 * s, wl + reach + s, tx + 10 * s, wl + reach + s, paint)
             }
         }
         paint.strokeCap = Paint.Cap.BUTT
@@ -968,59 +963,63 @@ class FjordScene(ctx: Context) {
 
 
     /**
-     * Finds where the hull meets the water in each column (it curves: deepest amidships, rising to
-     * the stems) and clears the old baked reflection's leftovers below it.
+     * Tidies the ship art for real water: clears the old baked reflection's leftovers under the
+     * shields and the faint streaks behind them, paints out the shield smudges in the hull (they
+     * read as a second reflection), and takes off the short oar stubs (the oars are drawn live).
      */
-    private fun keel(src: Bitmap): Bitmap {
-        val b = runCatching { src.copy(Bitmap.Config.ARGB_8888, true) }.getOrNull() ?: return src
-        if (b !== src) src.recycle()
-        val w = b.width; val h = b.height
-        val col = IntArray(h)
-        val k = IntArray(w) { -1 }
-        for (x in 0 until w) {
-            b.getPixels(col, 0, 1, x, 0, 1, h)
-            var y = h - 1
-            while (y >= 300 && (col[y] ushr 24) < 160) y--
-            if (y >= 300) {
-                k[x] = y
-                for (yy in y + 1 until h) col[yy] = 0
-                b.setPixels(col, 0, 1, x, 0, 1, h)
+    private fun cleanHull(src: Bitmap): Bitmap {
+        val w = src.width; val h = src.height
+        val px = IntArray(w * h); src.getPixels(px, 0, w, 0, 0, w, h)
+        src.recycle()
+        fun a(i: Int) = px[i] ushr 24
+        val solid = BooleanArray(w * h) { a(it) >= 200 }
+        for (y in 250 until h) for (x in 0 until w) {
+            val i = y * w + x
+            val al = a(i)
+            if (y >= 341) {
+                if (al < 160) { px[i] = 0; continue }
+                val c = px[i]
+                val lum = (Color.red(c) + Color.green(c) + Color.blue(c)) / 3
+                if (y >= 343 && lum < 52) px[i] = (al shl 24) or 0x090A0D
+            } else if (al < 120) {
+                var near = false
+                loop@ for (dy in -2..2) for (dx in -2..2) {
+                    val yy = y + dy; val xx = x + dx
+                    if (yy in 0 until h && xx in 0 until w && solid[yy * w + xx]) { near = true; break@loop }
+                }
+                if (!near) px[i] = 0
             }
         }
-        // columns with no hull (rigging, the stems' curls) take the nearest hull column's bottom
-        val first = k.indexOfFirst { it >= 0 }; val last = k.indexOfLast { it >= 0 }
-        if (first < 0) { keelRow = IntArray(w) { SHIP_WL - 1 }; return b }
-        for (x in 0 until w) if (k[x] < 0) k[x] = if (x < first) k[first] else if (x > last) k[last] else k[x - 1]
-        keelRow = k
-        return b
+        for (y in 352 until h) {
+            var x = 0
+            while (x < w) {
+                if (a(y * w + x) >= 160) {
+                    val x0 = x
+                    while (x < w && a(y * w + x) >= 160) x++
+                    if (x - x0 < 14) for (xx in x0 until x) px[y * w + xx] = 0
+                } else x++
+            }
+        }
+        return Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
     }
 
-    /**
-     * The ship mirrored about each column's own hull bottom, so the reflection meets the hull all
-     * along its curve; fading with depth and broken by a gentle ripple. Starts at row [REFL_TOP].
-     */
+    /** The ship mirrored about the waterline: fading with depth, cooler, broken by a gentle ripple. */
     private fun mirrorShip(src: Bitmap): Bitmap {
-        val w = src.width; val sh = src.height
-        val depth = sh                                   // how far down the reflection reaches
-        val h = SHIP_WL - REFL_TOP + depth
-        val px = IntArray(w * sh); src.getPixels(px, 0, w, 0, 0, w, sh)
-        val o = IntArray(w * h)
-        for (yo in 0 until h) {
-            val y = REFL_TOP + yo
+        val w = src.width; val h = src.height
+        val row = IntArray(w); val o = IntArray(w)
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        for (d in 0 until h) {
+            src.getPixels(row, 0, w, 0, h - 1 - d, w, 1)
+            val f = 1f - d / h.toFloat()
+            val shift = Math.round(sin((h + d) * 0.23f) * (1f + 4f * d / h))
+            val al = 0.5f * f * f * (0.9f + 0.1f * sin(d * 0.9f))
             for (x in 0 until w) {
-                val b = keelRow[x]
-                val d = y - b
-                if (d <= 0) continue
-                val shift = (sin(y * 0.23f) * 4f * (d / depth.toFloat())).toInt()
-                val sx = (x - shift).coerceIn(0, w - 1)
-                val sy = keelRow[sx] - d
-                if (sy < 0) continue
-                val c = px[sy * w + sx]
-                val f = 1f - (d / depth.toFloat()).coerceAtMost(1f)
-                o[yo * w + x] = (((c ushr 24) * 0.5f * f * f).toInt() shl 24) or (c and 0xFFFFFF)
+                val c = row[(x - shift).coerceIn(0, w - 1)]
+                o[x] = (((c ushr 24) * al).toInt() shl 24) or (c and 0xFFFFFF)
             }
+            out.setPixels(o, 0, w, 0, d, w, 1)
         }
-        return Bitmap.createBitmap(o, w, h, Bitmap.Config.ARGB_8888)
+        return out
     }
 
     /**
