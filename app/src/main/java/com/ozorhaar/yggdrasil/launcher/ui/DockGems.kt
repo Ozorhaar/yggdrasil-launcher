@@ -69,3 +69,22 @@ fun SettingsGem(modifier: Modifier = Modifier) = DockGem(modifier) {
         drawLine(Ygg.Frost, Offset(to.x - bx, to.y - by), Offset(to.x + bx, to.y + by), w, StrokeCap.Round)
     }
 }
+
+/**
+ * Heimdall's watch: Gjallarhorn, carved like the other marks and set into the foot of the band.
+ * Frost while every post answers, ember when one has fallen, dim when none can be seen.
+ */
+@Composable
+fun HeimdallGem(color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) = DockGem(modifier) {
+    val w = 2.dp.toPx()
+    val h = size.height; val wd = size.width
+    val horn = androidx.compose.ui.graphics.Path().apply {
+        moveTo(wd * 0.12f, h * 0.30f)
+        quadraticTo(wd * 0.45f, h * 1.05f, wd * 0.92f, h * 0.18f)
+    }
+    drawPath(horn, color, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = StrokeCap.Round))
+    // the bell, and two bands on the horn
+    drawLine(color, Offset(wd * 0.06f, h * 0.05f), Offset(wd * 0.16f, h * 0.62f), w, StrokeCap.Round)
+    drawLine(color, Offset(wd * 0.36f, h * 0.48f), Offset(wd * 0.42f, h * 0.85f), w * 0.7f, StrokeCap.Round)
+    drawLine(color, Offset(wd * 0.62f, h * 0.45f), Offset(wd * 0.72f, h * 0.78f), w * 0.7f, StrokeCap.Round)
+}

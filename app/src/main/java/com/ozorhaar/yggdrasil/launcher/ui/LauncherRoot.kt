@@ -188,6 +188,7 @@ fun LauncherRoot() {
     val gates = rememberGates()
     val heimdall = rememberHeimdall()
     var heimdallOpen by remember { mutableStateOf(false) }
+    var hornRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var steadingOpen by remember { mutableStateOf(false) }
     var sagaOpen by remember { mutableStateOf(false) }
     // the morning saga: once a day, the first time the home screen shows between 5 and 11
@@ -585,16 +586,12 @@ fun LauncherRoot() {
                             return@detectTapGestures
                         }
                         // Gjallarhorn at the foot of the rune band: Heimdall's report on the homelab
-                        val dpx = ctx.resources.displayMetrics.density
-                        if (layout.dockRunes && dockRect.width > 0f && kotlin.math.abs(p.x - dockRect.center.x) < 40 * dpx &&
-                            p.y > dockRect.bottom - 22 * dpx && p.y < dockRect.bottom + 10 * dpx) {
+                        if (hornRect.width > 0f && hornRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             heimdallOpen = true
                             return@detectTapGestures
                         }
-                        if (iconAt(p) || !dockRect.contains(p)) return@detectTapGestures
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        ctx.openAssistant()
+                        // the rest of the band does nothing: only Hafnir's mark calls him
                     },
                     onDoubleTap = { p ->
                         if (iconAt(p)) return@detectTapGestures
@@ -698,7 +695,7 @@ fun LauncherRoot() {
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
             Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it },
                 onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it },
-                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it }, heimdall = heimdall)
+                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it }, heimdall = heimdall, onHornPlaced = { hornRect = it })
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -972,6 +969,7 @@ private fun Dock(
     onSideDoorPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onGaragePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     heimdall: Heimdall.Report? = null,
+    onHornPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val homeLinked = LocalContext.current.ygg.homeLink.configured
     // the rune band doubles as the battery gauge; a light runs along it while charging
@@ -991,7 +989,7 @@ private fun Dock(
                 .fillMaxWidth()
                 .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
                 .then(
-                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold, gauge = { BandGauge(battery.first, battery.second, sweep?.value ?: 0f) }, horn = { heimdall.hornColor() }).padding(horizontal = 12.dp, vertical = 14.dp)
+                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold, gauge = { BandGauge(battery.first, battery.second, sweep?.value ?: 0f) }).padding(horizontal = 12.dp, vertical = 14.dp)
                     else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
                 ),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1031,6 +1029,14 @@ private fun Dock(
                     }
                 }
             }
+        }
+        // Heimdall's mark, set into the foot of the band
+        if (layout.dockRunes && homeLinked) {
+            HeimdallGem(
+                heimdall.hornColor(),
+                Modifier.align(Alignment.BottomCenter).offset(y = 4.dp)
+                    .onGloballyPositioned { onHornPlaced(it.boundsInRoot()) },
+            )
         }
         // Bifrost's mark, set into the top of the band (only when Bifrost is installed)
         if (bridge != null) {
