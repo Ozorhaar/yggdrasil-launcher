@@ -32,6 +32,7 @@ enum class Hall(val rune: String, val title: String, val words: List<String>) {
         "maps", "waze", "uber", "lyft", "airline", "delta", "united", "southwest", "american", "hotel", "airbnb",
         "expedia", "gas", "fuel", "parking", "transit", "trip", "travel", "android auto", "tesla", "ford",
         "toyota", "honda", "hyundai", "kia", "chevrolet", "gm", "onstar", "car",
+        "bmw", "audi", "mercedes", "volkswagen", "subaru", "nissan", "volvo", "mazda", "jeep", "rivian", "porsche",
     )),
     LORE("ᛒ", "The Lore", listOf(
         "news", "book", "kindle", "read", "wiki", "learn", "duolingo", "weather", "health", "fitness", "fit",
