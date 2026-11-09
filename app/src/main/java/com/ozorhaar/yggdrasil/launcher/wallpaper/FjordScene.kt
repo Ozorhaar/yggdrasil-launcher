@@ -45,6 +45,8 @@ private const val SHELF_FULL = 1084
 /** The longhouse's ends, in the art's coordinates. */
 private const val HALL_L = 1118f
 private const val HALL_R = 1402f
+/** The hull's waterline in the longship bitmap: everything below it is the art's old reflection. */
+private const val SHIP_WL = 386
 /** The sail on the longship bitmap (its own pixels). */
 private const val SAIL_L = 448; private const val SAIL_T = 40; private const val SAIL_R = 766; private const val SAIL_B = 284
 /** Solar output (W) at which the sail burns brightest. */
@@ -161,8 +163,17 @@ class FjordScene(ctx: Context) {
             tops[x] = y
         }
     }
-    private val ship: Bitmap = decode(ctx, R.drawable.fjord_ship)
-    private val sail: Bitmap? = sailMask(ship)
+    /** The longship cut at its waterline (the art's own baked reflection sat too high), and its true mirror image. */
+    private val ship: Bitmap
+    private val sail: Bitmap?
+    private val shipRefl: Bitmap
+    init {
+        val art = decode(ctx, R.drawable.fjord_ship)
+        sail = sailMask(art)
+        ship = Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL)
+        shipRefl = mirrorShip(ship)
+        if (ship !== art) art.recycle()
+    }
     private val ray: Bitmap = auroraRay()
     private val treeLazy = lazy { worldTree() }
     private val tree: Bitmap by treeLazy
@@ -509,12 +520,18 @@ class FjordScene(ctx: Context) {
                 paint.shader = RadialGradient(sailRect.centerX(), sailRect.centerY(), r, intArrayOf(argb(0.32f * sun * fade, 0xFFECD08F.toInt()), 0), null, Shader.TileMode.CLAMP)
                 c.drawCircle(sailRect.centerX(), sailRect.centerY(), r, paint); paint.shader = null
             }
-            if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
+            val shipR = shipL + 1427 * 1.04f * s; val wl = shipT + SHIP_WL * s
             paint.isFilterBitmap = true
-            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
             paint.alpha = (255 * fade).toInt()
-            rect.set(shipL, shipT, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
+            // its reflection: hull and sail mirrored at the waterline, dimmer, cooler and rippled
+            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl * 0.8f, sl * 0.86f, sl * 0.95f, 1f) })
+            rect.set(shipL, wl, shipR, wl + SHIP_WL * s)
+            c.drawBitmap(shipRefl, null, rect, paint)
+            paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
+            rect.set(shipL, shipT, shipR, wl)
             c.drawBitmap(ship, null, rect, paint)
+            paint.colorFilter = null; paint.alpha = 255
+            if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
             if (feast) dressShip(c, shipL, shipT, s, t, fade)
             paint.colorFilter = null; paint.alpha = 255
             val sm = sail
@@ -836,29 +853,68 @@ class FjordScene(ctx: Context) {
     }
 
     /**
-     * Oars out of the ports along the hull, sweeping aft through the water in a steady stroke and
-     * lifting back; drawn behind the hull so they come out from under the shields.
+     * Oars out of the ports under the shields, down the hull's side to the water, sweeping fore and
+     * aft in a steady stroke: blades dip in on the pull and lift clear on the return, with ripples
+     * where they bite and their reflections below the waterline.
      */
     private fun drawOars(c: Canvas, shipL: Float, shipT: Float, s: Float, t: Float, fade: Float, dark: Float) {
         val k = 1.04f * s
+        val wl = shipT + SHIP_WL * s
+        val portY = shipT + 344 * s
         paint.reset(); paint.isAntiAlias = true
         paint.strokeCap = Paint.Cap.ROUND
-        val wood = argb(fade, mix(0xFF5A4630.toInt(), 0xFF1C150F.toInt(), dark))
-        val phase = t * 0.0026f                                    // about one stroke every 2.4 s
-        for (i in 0 until 9) {
-            val px = shipL + (250 + i * 55) * k; val py = shipT + 350 * s
-            val a = (PI / 2 + 0.42 * sin(phase.toDouble())).toFloat()   // swing fore and aft
-            val len = (118 + 16 * kotlin.math.cos(phase.toDouble()).toFloat()) * s  // dips in, lifts out
-            val ex = px + kotlin.math.cos(a.toDouble()).toFloat() * len
-            val ey = py + sin(a.toDouble()).toFloat() * len
-            paint.color = wood; paint.strokeWidth = 3.2f * s
-            c.drawLine(px, py, ex, ey, paint)
-            paint.strokeWidth = 7f * s
-            val bx = px + kotlin.math.cos(a.toDouble()).toFloat() * len * 0.82f
-            val by = py + sin(a.toDouble()).toFloat() * len * 0.82f
-            c.drawLine(bx, by, ex, ey, paint)
+        val wood = mix(0xFF7A5E3C.toInt(), 0xFF2C2219.toInt(), dark)
+        val phase = (t * 0.0026f).toDouble()                       // about one stroke every 2.4 s
+        val lean = 0.45f * sin(phase).toFloat()                    // fore and aft, from straight down
+        val dip = (9f * kotlin.math.cos(phase).toFloat() - 1f) * s  // in the water on the pull, clear on the return
+        val tan = kotlin.math.tan(lean.toDouble()).toFloat()
+        val l = shipL - 200 * s; val r = shipL + 1700 * s
+        for (mirror in listOf(true, false)) {
+            c.save()
+            if (mirror) { c.clipRect(l, wl, r, wl + 300 * s); c.scale(1f, -1f, 0f, wl) }
+            else c.clipRect(l, shipT, r, wl + 1f * s)
+            paint.color = argb(fade * (if (mirror) 0.35f else 1f), wood)
+            for (i in 0 until 9) {
+                val px = shipL + (300 + i * 58) * k
+                val ty = wl + dip; val tx = px + tan * (ty - portY)
+                paint.strokeWidth = 3.2f * s
+                c.drawLine(px, portY, tx, ty, paint)
+                paint.strokeWidth = 7f * s
+                c.drawLine(px + (tx - px) * 0.72f, portY + (ty - portY) * 0.72f, tx, ty, paint)
+            }
+            c.restore()
+        }
+        // the ports, and ripples where the blades bite
+        paint.color = argb(fade, mix(0xFF000000.toInt(), wood, 0.25f))
+        for (i in 0 until 9) c.drawCircle(shipL + (300 + i * 58) * k, portY, 3f * s, paint)
+        if (dip > 0f) {
+            paint.color = argb(fade * 0.5f * (dip / (8f * s)).coerceAtMost(1f), 0xFFDDE6F5.toInt())
+            paint.strokeWidth = 1.6f * s
+            for (i in 0 until 9) {
+                val tx = shipL + (300 + i * 58) * k + tan * (wl - portY)
+                c.drawLine(tx - 9 * s, wl + 2 * s, tx + 9 * s, wl + 2 * s, paint)
+            }
         }
         paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    /** The hull and sail mirrored at the waterline, fading with depth and broken by a gentle ripple. */
+    private fun mirrorShip(src: Bitmap): Bitmap {
+        val w = src.width; val h = src.height
+        val row = IntArray(w); val o = IntArray(w)
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        for (y in 0 until h) {
+            src.getPixels(row, 0, w, 0, h - 1 - y, w, 1)
+            val d = y / h.toFloat()
+            val fall = 0.5f * (1 - d) * (1 - d)
+            val shift = (sin(y * 0.23f) * 4f * d).toInt()
+            for (x in 0 until w) {
+                val c = row[(x - shift).coerceIn(0, w - 1)]
+                o[x] = (((c ushr 24) * fall).toInt() shl 24) or (c and 0xFFFFFF)
+            }
+            out.setPixels(o, 0, w, 0, y, w, 1)
+        }
+        return out
     }
 
     /**
@@ -937,7 +993,7 @@ class FjordScene(ctx: Context) {
     }
 
     fun release() {
-        land.recycle(); ship.recycle(); ray.recycle(); puff.recycle(); sail?.recycle()
+        land.recycle(); ship.recycle(); shipRefl.recycle(); ray.recycle(); puff.recycle(); sail?.recycle()
         if (treeLazy.isInitialized()) tree.recycle()
     }
 
