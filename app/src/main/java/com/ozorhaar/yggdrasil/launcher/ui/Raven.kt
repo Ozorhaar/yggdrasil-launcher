@@ -46,15 +46,16 @@ private val RIM = Ygg.Frost.copy(alpha = 0.45f)
  * longhouse ([FjordScene.ridgePerch]). It only animates while it's on screen.
  */
 @Composable
-fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit) {
+fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit, herald: Boolean = false) {
     val flight = remember { Animatable(0f) }       // 0 = away, 1 = on the ridge
     var present by remember { mutableStateOf(false) }
     var leaving by remember { mutableStateOf(false) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     var clock by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(watching != null) {
-        if (watching != null) {
+    val wanted = watching != null || herald
+    LaunchedEffect(wanted) {
+        if (wanted) {
             leaving = false
             present = true
             flight.animateTo(1f, tween(1800, easing = LinearOutSlowInEasing))
@@ -92,6 +93,15 @@ fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit)
             // a slow look about: the head turns a little now and then
             val bob = 7f * sin(t * 1.3f) * sin(t * 0.37f + 0.6f)
             perchedRaven(px, py, l, bob)
+            // on the name-day, with no one at the doors, it carries a rune-stick in its beak
+            if (herald && watching == null) {
+                val sx = px - 0.62f * l; val sy = py - 0.56f * l
+                drawLine(Color(0xFFC8A25A), Offset(sx - 0.22f * l, sy + 0.04f * l), Offset(sx + 0.12f * l, sy - 0.02f * l), 0.07f * l, StrokeCap.Round)
+                for (i in 0 until 3) {
+                    val tx = sx - 0.15f * l + i * 0.09f * l
+                    drawLine(RAVEN, Offset(tx, sy - 0.0f * l), Offset(tx + 0.02f * l, sy + 0.04f * l), 0.015f * l)
+                }
+            }
             return@Canvas
         }
         val u = flight.value

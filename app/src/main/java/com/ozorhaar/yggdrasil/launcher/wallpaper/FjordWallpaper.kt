@@ -41,6 +41,7 @@ class FjordWallpaper : WallpaperService() {
                 scene?.demoStart = p.getLong(DEMO_PREF, 0L)
                 if (visible) drawFrame()
             }
+            if (key == Birthday.PREVIEW_PREF && visible) drawFrame()
             if (key == FLARE_PREF) {
                 scene?.flareAt = p.getLong(FLARE_PREF, 0L)
                 lastHouse = 0L                       // read the house again too

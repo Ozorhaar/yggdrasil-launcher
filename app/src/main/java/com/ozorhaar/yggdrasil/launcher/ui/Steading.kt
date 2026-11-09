@@ -170,6 +170,8 @@ fun MorningSaga(gates: GateStates, onClose: () -> Unit) {
 /** The saga's lines: (heading, words). Blocking. */
 private fun saga(ctx: Context, gates: GateStates): List<Pair<String, String>> {
     val out = mutableListOf<Pair<String, String>>()
+    if (com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.today(ctx))
+        out += "A saga for ${com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.NAME}" to com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.VERSE
     Weather.get(ctx)?.let { w -> out += "The sky" to "${w.tempF}°, ${w.words.lowercase()}; a high of ${w.highF}° and a low of ${w.lowF}°." }
     Weather.alerts(ctx).takeIf { it.isNotEmpty() }?.let { a -> out += "Storm warning" to a.joinToString("; ") { it.event } }
     val today = nornsToday(ctx)
@@ -191,4 +193,21 @@ private fun saga(ctx: Context, gates: GateStates): List<Pair<String, String>> {
     val (n, verse) = Hovamol.today()
     out += "Hovamol $n" to verse
     return out
+}
+
+
+/** The raven's rune-stick, unrolled: a name-day greeting. */
+@Composable
+fun RuneStickGreeting(onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        Sheet(Ygg.GoldHi) {
+            RuneText("A rune-stick from the ravens", 20.sp, Ygg.GoldHi)
+            Spacer(Modifier.height(10.dp))
+            Text(com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.GREETING, color = Ygg.Bone, fontSize = 15.sp)
+            Spacer(Modifier.height(10.dp))
+            Text(com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.VERSE, color = Ygg.Frost, fontSize = 14.sp)
+            Spacer(Modifier.height(16.dp))
+            RuneButton("Skål!") { onClose() }
+        }
+    }
 }

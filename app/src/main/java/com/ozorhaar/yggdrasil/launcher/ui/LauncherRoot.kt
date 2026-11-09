@@ -189,6 +189,11 @@ fun LauncherRoot() {
     val heimdall = rememberHeimdall()
     var heimdallOpen by remember { mutableStateOf(false) }
     var hornCallOpen by remember { mutableStateOf(false) }
+    var greetingOpen by remember { mutableStateOf(false) }
+    // Jason's name-day: a raven with a rune-stick waits on the roof (checked every few seconds, for the preview)
+    val herald by androidx.compose.runtime.produceState(false) {
+        while (true) { value = com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.today(ctx); kotlinx.coroutines.delay(5_000L) }
+    }
     var hornRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var steadingOpen by remember { mutableStateOf(false) }
     var sagaOpen by remember { mutableStateOf(false) }
@@ -553,6 +558,8 @@ fun LauncherRoot() {
                             when {
                                 // more than a camera to show (a leak, the smoker, the forge): the whole steading
                                 homeLinkReady && gates.steading?.busy == true -> steadingOpen = true
+                                gates.watching() != null && homeLinkReady -> peekGate = gates.watching()
+                                herald -> greetingOpen = true
                                 look != null && homeLinkReady -> peekGate = look
                                 else -> ctx.openHomeAssistant()
                             }
@@ -670,7 +677,8 @@ fun LauncherRoot() {
             )
         }
         // the raven on the longhouse roof, under the icons
-        if (homeLinkReady) RavenWatch(
+        if (homeLinkReady || herald) RavenWatch(
+            herald = herald,
             watching = gates.watching(),
             wallX = {
                 val n = layout.pages.size
@@ -796,6 +804,7 @@ fun LauncherRoot() {
         peekGate?.let { g -> CameraPeek(g, gates) { peekGate = null } }
         if (heimdallOpen) HeimdallSheet(heimdall) { heimdallOpen = false }
         if (hornCallOpen) HornCallSheet { hornCallOpen = false }
+        if (greetingOpen) RuneStickGreeting { greetingOpen = false }
         if (steadingOpen) SteadingSheet(
             gates.steading, gates.watching(), gates.parcelAt(),
             onLook = { peekGate = it }, onClose = { steadingOpen = false },

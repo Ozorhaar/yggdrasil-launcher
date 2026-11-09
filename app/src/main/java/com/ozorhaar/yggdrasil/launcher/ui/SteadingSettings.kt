@@ -62,6 +62,13 @@ internal fun SteadingSection() {
         },
         colors = SliderDefaults.colors(thumbColor = Ygg.Gold, activeTrackColor = Ygg.Gold),
     )
+    Spacer(Modifier.height(10.dp))
+    StatusLine("The name-day feast comes by itself on 1 January.")
+    Spacer(Modifier.height(4.dp))
+    RuneButton("Preview the birthday") {
+        com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.preview(ctx)
+        android.widget.Toast.makeText(ctx, "Go to the home screen: the feast lasts about a minute", android.widget.Toast.LENGTH_LONG).show()
+    }
     Spacer(Modifier.height(6.dp))
     StatusLine("Home Assistant entities (comma-separated where there can be several):")
     Entities.entries.forEach { e ->

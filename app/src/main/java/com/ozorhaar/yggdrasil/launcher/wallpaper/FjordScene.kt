@@ -57,6 +57,8 @@ class FjordScene(ctx: Context) {
     // which living touches are on (read from the steading settings each frame)
     private var showHearth = true; private var showFire = true; private var showForge = true
     private var showLeak = true; private var showYule = true
+    /** The name-day feast is on (1 January, or a preview). */
+    private var feast = false
 
     companion object {
         /**
@@ -265,6 +267,10 @@ class FjordScene(ctx: Context) {
         val realHouse = house
         showHearth = cfg(Touch.HEARTH); showFire = cfg(Touch.FIRE); showForge = cfg(Touch.FORGE)
         showLeak = cfg(Touch.LEAK); showYule = cfg(Touch.YULE)
+        // Jason's name-day: the hall keeps a feast all day, fireworks after midnight
+        feast = Birthday.today(appCtx, realNow)
+        val fireworks = Birthday.fireworks(appCtx, realNow)
+        if (feast) house = (house ?: House(false, false, false)).copy(lightsOn = true, hearth = true)
         if (demo != null) house = (realHouse ?: House(false, false, false)).copy(
             lightsOn = true, hearth = true, solarW = if (p.dark < 0.4f) SOLAR_FULL_W else 0f,
         )
@@ -382,6 +388,22 @@ class FjordScene(ctx: Context) {
             c.drawRect(0f, 0f, w.toFloat(), hz, paint)
         }
 
+        // Bifröst: on the name-day, the rainbow bridge arcs across the daytime sky (its feet behind the hills)
+        if (feast && light > 0.3f) {
+            val bands = intArrayOf(0xFFB0402A.toInt(), 0xFFE0703A.toInt(), 0xFFECD08F.toInt(), 0xFF6FA86A.toInt(), 0xFF8FC4E0.toInt(), 0xFF5A6AB0.toInt(), 0xFF8A6AB0.toInt())
+            val bw = h * 0.011f
+            val r0 = w * 0.62f; val bcx = w * 0.5f + skyPar; val bcy = hz + h * 0.08f
+            paint.style = Paint.Style.STROKE; paint.strokeWidth = bw * 1.05f
+            for ((i, col) in bands.withIndex()) {
+                val rr = r0 - i * bw
+                paint.color = argb(0.2f * light * (1 - cloud * 0.6f), col)
+                c.drawArc(bcx - rr, bcy - rr, bcx + rr, bcy + rr, 180f, 180f, false, paint)
+            }
+            paint.style = Paint.Style.FILL
+        }
+
+        if (fireworks) drawFireworks(c, w, hz, s, t, false)
+
         // the glow in the fjord's mouth at dawn and dusk
         val valleyX = ox + 1440 * s * 0.62f + skyPar
         val glowA = (if (solstice) max(p.glow, 0.75f) else p.glow) * (1 - cloud * 0.7f)
@@ -420,6 +442,8 @@ class FjordScene(ctx: Context) {
         val landX = ox - 1440 * s * 0.02f + par
         val landTop = oy + 1327 * s
         val landBot = oy + 1935 * s
+
+        if (fireworks) drawFireworks(c, w, hz, s, t, true)
 
         // reflection of the mountains
         c.save()
@@ -491,6 +515,7 @@ class FjordScene(ctx: Context) {
             paint.alpha = (255 * fade).toInt()
             rect.set(shipL, shipT, ox + (13 + 1427) * s * 1.04f - 1440 * s * 0.02f + par, oy + (1598 + 1519) * s)
             c.drawBitmap(ship, null, rect, paint)
+            if (feast) dressShip(c, shipL, shipT, s, t, fade)
             paint.colorFilter = null; paint.alpha = 255
             val sm = sail
             if (sun > 0.02f && sm != null) {
@@ -519,6 +544,7 @@ class FjordScene(ctx: Context) {
             else -> 60_000L
         }
         animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy
+        if (fireworks) { animating = true; frameMs = 66L }
         house = realHouse
     }
 
@@ -594,6 +620,25 @@ class FjordScene(ctx: Context) {
             paint.color = roof; c.drawCircle(px, base - 48 * s, 4f * s, paint)
         }
 
+        // the feast: long banners stream from poles at both gable ends
+        if (feast) {
+            for ((i, gx) in listOf(l + 40 * s, r - 40 * s).withIndex()) {
+                val top = ridge - 34 * s
+                paint.color = roof; paint.style = Paint.Style.STROKE; paint.strokeWidth = 2.4f * s
+                c.drawLine(gx, ridge - 10 * s, gx, top, paint)
+                paint.style = Paint.Style.FILL
+                path.reset()
+                path.moveTo(gx, top)
+                val wave = sin(t * 0.004f + i * 1.7f) * 4 * s
+                path.quadTo(gx - 20 * s, top + 2 * s + wave, gx - 42 * s, top + 6 * s + wave * 1.5f)
+                path.quadTo(gx - 20 * s, top + 10 * s + wave, gx, top + 14 * s)
+                path.close()
+                paint.color = argb(0.95f, 0xFFB0402A.toInt()); c.drawPath(path, paint)
+                paint.color = argb(0.95f, 0xFFECD08F.toInt())
+                c.drawRect(gx - 3 * s, top + 1 * s, gx, top + 13 * s, paint)
+            }
+        }
+
         // Yule: an evergreen swag under the eaves hung with lanterns, and a wreath on the door
         if (showYule && isYule(System.currentTimeMillis())) {
             val green = mix(0xFF16261B.toInt(), 0xFF2F5A3A.toInt(), light * 0.8f + 0.2f)
@@ -651,8 +696,8 @@ class FjordScene(ctx: Context) {
             paint.color = argb(0.9f * flick, 0xFFECD08F.toInt()); c.drawRect(hx - 6 * s, hy - 1.5f * s, hx + 6 * s, hy + 1.5f * s, paint)
             // by day grey smoke; by night pale, starlit smoke, warmed by the fire where it leaves the roof
             val pale = mix(0xFF7C8496.toInt(), 0xFFB4B9C2.toInt(), light)
-            val strength = 0.42f + 0.28f * dark
-            val life = 7000f; val n = 16
+            val strength = (0.42f + 0.28f * dark) * (if (feast) 1.35f else 1f)
+            val life = 7000f; val n = if (feast) 24 else 16
             for (i in 0 until n) {
                 val age = (((t + i * life / n) % life) / life)
                 val rise = age * 230 * s
@@ -814,6 +859,68 @@ class FjordScene(ctx: Context) {
             c.drawLine(bx, by, ex, ey, paint)
         }
         paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    /**
+     * Fireworks over the fjord: a burst of gold, ember and frost sparks every 1.4 s, falling as
+     * they fade. With [mirror], their reflection in the water below the horizon.
+     */
+    private fun drawFireworks(c: Canvas, w: Int, hz: Float, s: Float, t: Float, mirror: Boolean) {
+        val period = 1400L; val life = 2000f
+        val tl = t.toLong()
+        paint.style = Paint.Style.FILL
+        for (k in 0..2) {
+            val b = tl / period - k
+            val age = (tl - b * period).toFloat()
+            if (age !in 0f..life) continue
+            val rnd = Random(b * 7919L)
+            val x = w * (0.12f + 0.76f * rnd.nextFloat())
+            val y = hz * (0.2f + 0.3f * rnd.nextFloat())
+            val col = intArrayOf(0xFFECD08F.toInt(), 0xFFE0703A.toInt(), 0xFF8FC4E0.toInt(), 0xFFF0C070.toInt())[rnd.nextInt(4)]
+            val speed = w * (0.1f + 0.06f * rnd.nextFloat())
+            val a = age / 1000f
+            val fade = Math.pow((1 - age / life).toDouble(), 1.5).toFloat()
+            val g = w * 0.12f
+            fun ys(v: Float) = if (mirror) 2 * hz - v else v
+            val aMul = if (mirror) 0.25f else 1f
+            if (age < 160 && !mirror) {
+                paint.shader = RadialGradient(x, y, 60 * s, intArrayOf(argb(0.6f * (1 - age / 160f), col), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(x, y, 60 * s, paint); paint.shader = null
+            }
+            for (i in 0 until 48) {
+                val ang = (i / 48f) * 2 * PI.toFloat() + rnd.nextFloat() * 0.12f
+                val v = speed * (0.75f + 0.25f * rnd.nextFloat())
+                val px = x + kotlin.math.cos(ang) * v * a
+                val py = y + sin(ang) * v * a + 0.5f * g * a * a
+                paint.color = argb(fade * aMul, col)
+                c.drawCircle(px, ys(py), 2.6f * s, paint)
+            }
+        }
+    }
+
+    /** The longship dressed for the feast: a long pennant from the masthead and flags along the stay. */
+    private fun dressShip(c: Canvas, shipL: Float, shipT: Float, s: Float, t: Float, fade: Float) {
+        val k = 1.04f * s
+        fun x(a: Float) = shipL + a * k
+        fun y(a: Float) = shipT + a * s
+        val p = android.graphics.Path()
+        paint.reset(); paint.isAntiAlias = true
+        val wave = sin(t * 0.004f) * 6 * s
+        p.moveTo(x(585f), y(6f))
+        p.quadTo(x(640f), y(10f) + wave, x(700f), y(16f) + wave * 1.4f)
+        p.quadTo(x(640f), y(24f) + wave, x(585f), y(30f))
+        p.close()
+        paint.color = argb(0.95f * fade, 0xFFB0402A.toInt()); c.drawPath(p, paint)
+        val cols = intArrayOf(0xFFECD08F.toInt(), 0xFFE0703A.toInt(), 0xFF8FC4E0.toInt())
+        for (i in 0 until 7) {
+            val f = (i + 0.5f) / 7f
+            val fx = x(585f + (880f - 585f) * f); val fy = y(40f + (140f - 40f) * f)
+            p.reset()
+            p.moveTo(fx - 6 * s, fy); p.lineTo(fx + 6 * s, fy); p.lineTo(fx, fy + 13 * s); p.close()
+            paint.color = argb(0.95f * fade, cols[i % 3]); c.drawPath(p, paint)
+        }
+        paint.color = argb(0.6f * fade, 0xFF1C150F.toInt()); paint.strokeWidth = 1.2f * s
+        c.drawLine(x(585f), y(40f), x(880f), y(140f), paint)
     }
 
     /** 21 December, the midwinter solstice (as it falls in North America's eastern time). */
