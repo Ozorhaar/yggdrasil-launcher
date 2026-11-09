@@ -883,7 +883,8 @@ class FjordScene(ctx: Context) {
         paint.strokeCap = Paint.Cap.ROUND
         val wood = mix(0xFF7A5E3C.toInt(), 0xFF2C2219.toInt(), dark)
         val phase = (t * 0.0026f).toDouble()                       // about one stroke every 2.4 s
-        val sweep = 26f * s * sin(phase).toFloat()
+        // the ship heads right (bow to the right): blades catch forward and pull aft while in the water
+        val sweep = -26f * s * sin(phase).toFloat()
         val lift = maxOf(0f, -kotlin.math.cos(phase).toFloat()) * 9f * s
         fun y(t0: Float, refl: Boolean): Float {
             val water = wl + reach * t0; val above = hgt * (1 - t0) + lift * t0
