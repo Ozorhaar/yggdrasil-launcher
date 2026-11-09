@@ -16,6 +16,7 @@ import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import com.ozorhaar.yggdrasil.launcher.R
+import com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch
 import com.ozorhaar.yggdrasil.launcher.weather.Weather
 import java.util.Calendar
 import kotlin.math.PI
@@ -50,6 +51,12 @@ private const val SAIL_L = 448; private const val SAIL_T = 40; private const val
 private const val SOLAR_FULL_W = 7000f
 
 class FjordScene(ctx: Context) {
+    private val appCtx = ctx.applicationContext
+    private fun cfg(t: Touch) =
+        com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(appCtx, t)
+    // which living touches are on (read from the steading settings each frame)
+    private var showHearth = true; private var showFire = true; private var showForge = true
+    private var showLeak = true; private var showYule = true
 
     companion object {
         /**
@@ -155,6 +162,8 @@ class FjordScene(ctx: Context) {
     private val ship: Bitmap = decode(ctx, R.drawable.fjord_ship)
     private val sail: Bitmap? = sailMask(ship)
     private val ray: Bitmap = auroraRay()
+    private val treeLazy = lazy { worldTree() }
+    private val tree: Bitmap by treeLazy
     private val puff: Bitmap = cloudPuff()
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -254,6 +263,8 @@ class FjordScene(ctx: Context) {
         val p = skyAt(now)
         // the demo also shows the steading at its liveliest: hearth lit, sail full of sun by day
         val realHouse = house
+        showHearth = cfg(Touch.HEARTH); showFire = cfg(Touch.FIRE); showForge = cfg(Touch.FORGE)
+        showLeak = cfg(Touch.LEAK); showYule = cfg(Touch.YULE)
         if (demo != null) house = (realHouse ?: House(false, false, false)).copy(
             lightsOn = true, hearth = true, solarW = if (p.dark < 0.4f) SOLAR_FULL_W else 0f,
         )
@@ -320,9 +331,37 @@ class FjordScene(ctx: Context) {
         // northern lights
         val night = floor((now - 12 * 3600_000L) / 86_400_000.0)
         // real space weather: nothing below Kp 4, faint at 4, a fair chance from Ohio at 6, full from 8
-        val auroraNight = if (demo != null) demo.third else if (kp < 4f) 0f else min(1f, 0.15f + (kp - 4f) * 0.25f)
+        val auroraNight = when {
+            demo != null -> demo.third
+            !cfg(Touch.REAL_AURORA) ->
+                0.35f + 0.65f * frac(sin(night * 12.9898) * 43758.5453).toFloat()   // some, every clear night
+            kp < 4f -> 0f
+            else -> min(1f, 0.15f + (kp - 4f) * 0.25f)
+        }
         val auroraA = auroraNight * ((p.dark - 0.65f) / 0.35f).coerceIn(0f, 1f) * (1 - cloud * 2.2f).coerceIn(0f, 1f)
         if (auroraA > 0.03f) drawAurora(c, w, h, t, auroraA, skyPar)
+
+        // Yggdrasil itself: on clear nights the World Tree's bare crown rises behind the mountains,
+        // a darker shape against the stars, its branches edged green and frost while the lights dance
+        val treeA = ((p.dark - 0.6f) / 0.4f).coerceIn(0f, 1f) * (1 - cloud * 2f).coerceIn(0f, 1f)
+        if (treeA > 0.03f && cfg(Touch.WORLD_TREE)) {
+            val tb = tree
+            val th = h * 0.5f; val tw = th * tb.width / tb.height
+            val cx = w * 0.34f + skyPar * 0.7f
+            rect.set(cx - tw / 2, hz - th, cx + tw / 2, hz + 2)
+            paint.colorFilter = PorterDuffColorFilter(mix(top, 0xFF000000.toInt(), 0.55f), PorterDuff.Mode.SRC_IN)
+            paint.alpha = (235 * treeA).toInt()
+            c.drawBitmap(tb, null, rect, paint)
+            if (auroraA > 0.03f) {
+                paint.colorFilter = PorterDuffColorFilter(0xFF3FE0A0.toInt(), PorterDuff.Mode.SRC_IN)
+                paint.blendMode = BlendMode.PLUS
+                paint.alpha = (70 * auroraA * treeA).toInt()
+                rect.offset(0f, -2f * s)
+                c.drawBitmap(tb, null, rect, paint)
+                paint.blendMode = null
+            }
+            paint.colorFilter = null; paint.alpha = 255
+        }
 
         // clouds
         if (cloud > 0.15f) {
@@ -417,14 +456,14 @@ class FjordScene(ctx: Context) {
         // longship, its reflection and the ripples. It sails out of the fjord when no one's home
         // and back in when someone is, and rows while the house sends power to the grid.
         val h0 = house
-        val outTarget = if (h0?.away == true) 1f else 0f
+        val outTarget = if (h0?.away == true && cfg(Touch.LONGSHIP)) 1f else 0f
         if (shipOut < 0f) shipOut = if (h0 == null) 0f else outTarget
         if (shipOut != outTarget) {
             val step = dt / 16f                                   // ~16 s to cross the fjord
             shipOut = if (shipOut < outTarget) min(outTarget, shipOut + step) else max(outTarget, shipOut - step)
         }
         val sailing = shipOut != outTarget
-        val rowing = sailing || (h0?.exportW ?: 0f) > 150f
+        val rowing = sailing || ((h0?.exportW ?: 0f) > 150f && cfg(Touch.OARS))
         if (shipOut < 0.995f) {
             val sl = lerp(1.15f, 0.65f, p.dark)
             val shipL = ox + 13 * s * 1.04f - 1440 * s * 0.02f + par; val shipT = oy + 1598 * s
@@ -437,7 +476,8 @@ class FjordScene(ctx: Context) {
             c.translate(lerp(pivX, valleyX, u), lerp(pivY, hz, u))
             c.scale(k, k)
             c.translate(-pivX, -pivY)
-            val sun = sqrt(((h0?.solarW ?: 0f) / SOLAR_FULL_W).coerceIn(0f, 1f))
+            val sun = if (!cfg(Touch.SAIL)) 0f
+                else sqrt(((h0?.solarW ?: 0f) / SOLAR_FULL_W).coerceIn(0f, 1f))
             val sailRect = RectF(shipL + SAIL_L * 1.04f * s, shipT + SAIL_T * s, shipL + SAIL_R * 1.04f * s, shipT + SAIL_B * s)
             if (sun > 0.02f) {
                 // the panels' power, caught in the sail: a warm halo behind it...
@@ -471,13 +511,14 @@ class FjordScene(ctx: Context) {
         if (precip > 0) drawPrecip(c, w, h, dt, t, precip, skyKind == Weather.Sky.SNOW, light)
 
         animating = demo != null || auroraA > 0.03f || precip > 0 || skyKind == Weather.Sky.THUNDER
-        val smoke = house?.hearth == true
+        val smoke = house?.hearth == true && showHearth
+        val busy = (house?.leak == true && showLeak) || (house?.fire == true && showFire) || (house?.forge == true && showForge)
         frameMs = when {
             animating || sailing -> 66L
-            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || house?.leak == true || house?.fire == true || house?.forge == true -> 125L
+            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy -> 125L
             else -> 60_000L
         }
-        animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || house?.leak == true || house?.fire == true || house?.forge == true
+        animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy
         house = realHouse
     }
 
@@ -554,7 +595,7 @@ class FjordScene(ctx: Context) {
         }
 
         // Yule: an evergreen swag under the eaves hung with lanterns, and a wreath on the door
-        if (isYule(System.currentTimeMillis())) {
+        if (showYule && isYule(System.currentTimeMillis())) {
             val green = mix(0xFF16261B.toInt(), 0xFF2F5A3A.toInt(), light * 0.8f + 0.2f)
             paint.style = Paint.Style.STROKE; paint.strokeWidth = 5f * s; paint.strokeCap = Paint.Cap.ROUND
             paint.color = green
@@ -602,7 +643,7 @@ class FjordScene(ctx: Context) {
         }
 
         // the hearth: while Jason or Leah is home, embers glow in the smoke hole and smoke rises
-        if (h?.hearth == true) {
+        if (h?.hearth == true && showHearth) {
             val hx = mid + 40 * s; val hy = ridge + 3 * s
             val flick = 0.8f + 0.2f * sin(t * 0.009f) * sin(t * 0.0047f + 1.3f)
             paint.shader = RadialGradient(hx, hy, 18 * s, intArrayOf(argb((0.35f + 0.5f * dark) * flick, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
@@ -627,7 +668,7 @@ class FjordScene(ctx: Context) {
         }
 
         // the forge: while the printer works, a stone chimney near the hall's right end throws sparks
-        if (h?.forge == true) {
+        if (h?.forge == true && showForge) {
             val cx = r - 72 * s; val ctop = ridge + 6 * s
             paint.color = mix(0xFF2A2C30.toInt(), 0xFF6A6660.toInt(), light)
             c.drawRect(cx - 7 * s, ctop - 18 * s, cx + 7 * s, ctop + 14 * s, paint)
@@ -645,7 +686,7 @@ class FjordScene(ctx: Context) {
         }
 
         // Surtur's fire: while the smoker is lit, a cooking fire with a spit on the hillside below the lantern
-        if (h?.fire == true) {
+        if (h?.fire == true && showFire) {
             val artX = (HALL_L - 70f).toInt().coerceIn(0, groundTops.size - 1)
             val fx = x(artX.toFloat()); val fy = y(groundTops[artX].toFloat()) + 2 * s
             paint.shader = RadialGradient(fx, fy - 8 * s, 40 * s, intArrayOf(argb(0.35f + 0.45f * dark, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
@@ -681,7 +722,7 @@ class FjordScene(ctx: Context) {
         }
 
         // a leak: water rises about the hall's footing, and the hall glows ember
-        if (h?.leak == true) {
+        if (h?.leak == true && showLeak) {
             val beat = 0.5f + 0.5f * sin(t * 0.006f)
             paint.style = Paint.Style.STROKE; paint.strokeWidth = 3f * s
             paint.color = argb(0.45f + 0.45f * beat, 0xFFE0703A.toInt())
@@ -790,6 +831,7 @@ class FjordScene(ctx: Context) {
 
     fun release() {
         land.recycle(); ship.recycle(); ray.recycle(); puff.recycle(); sail?.recycle()
+        if (treeLazy.isInitialized()) tree.recycle()
     }
 
     /** Just the sail's cloth from the longship (the rigging and hull left out), for lighting it. */
@@ -843,6 +885,50 @@ class FjordScene(ctx: Context) {
 
     private fun decode(ctx: Context, res: Int): Bitmap =
         BitmapFactory.decodeResource(ctx.resources, res, BitmapFactory.Options().apply { inScaled = false })
+
+    /**
+     * The World Tree's silhouette, drawn once: a great trunk that splits again and again into a
+     * broad, bare ash crown (white; tinted when drawn).
+     */
+    private fun worldTree(): Bitmap {
+        val wd = 900; val ht = 1000
+        val r = Random(7)
+        val segs = ArrayList<FloatArray>(9000)          // x1, y1, x2, y2, width (trunk foot at 0,0; up is -y)
+        fun branch(x: Float, y: Float, ang: Float, len: Float, sw: Float, depth: Int) {
+            val x2 = x + kotlin.math.cos(ang) * len; val y2 = y + sin(ang) * len
+            segs += floatArrayOf(x, y, x2, y2, sw)
+            if (depth == 0) return
+            val kids = if (depth >= 5 && r.nextFloat() < 0.45f) 3 else 2
+            for (k in 0 until kids) {
+                val side = if (kids == 3) floatArrayOf(-1f, 1f, 0f)[k] else if (k == 0) -1f else 1f
+                val spread = if (side == 0f) 0.05f else 0.28f + 0.32f * r.nextFloat()
+                val lean = (ang + PI.toFloat() / 2) * 0.10f            // older limbs lean outward
+                val a = ang + side * spread + lean + (r.nextFloat() - 0.5f) * 0.22f
+                branch(x2, y2, a, len * (0.66f + 0.12f * r.nextFloat()), (sw * 0.66f).coerceAtLeast(1f), depth - 1)
+            }
+        }
+        // a thick, slightly wandering trunk, then three great limbs
+        var x = 0f; var y = 0f; var sw = 60f
+        repeat(3) {
+            val a = -PI.toFloat() / 2 + (r.nextFloat() - 0.5f) * 0.12f
+            val x2 = x + kotlin.math.cos(a) * 90; val y2 = y + sin(a) * 90
+            segs += floatArrayOf(x, y, x2, y2, sw); x = x2; y = y2; sw *= 0.92f
+        }
+        for (a in floatArrayOf(-PI.toFloat() / 2 - 0.7f, -PI.toFloat() / 2 - 0.15f, -PI.toFloat() / 2 + 0.5f)) branch(x, y, a, 150f, sw * 0.7f, 9)
+        // fit the whole tree into the bitmap, foot at the bottom centre
+        var minX = 0f; var maxX = 0f; var minY = 0f
+        for (g in segs) { minX = min(minX, min(g[0], g[2])); maxX = max(maxX, max(g[0], g[2])); minY = min(minY, min(g[1], g[3])) }
+        val sc = min((wd - 20) / (maxX - minX), (ht - 10) / -minY)
+        val cx = wd / 2f - (minX + maxX) / 2 * sc
+        val bm = Bitmap.createBitmap(wd, ht, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(bm)
+        val pp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+        for (g in segs) {
+            pp.strokeWidth = max(1f, g[4] * sc)
+            cv.drawLine(cx + g[0] * sc, ht + g[1] * sc, cx + g[2] * sc, ht + g[3] * sc, pp)
+        }
+        return bm
+    }
 
     /** One vertical aurora ray: transparent violet at the top, green at the foot. */
     private fun auroraRay(): Bitmap {

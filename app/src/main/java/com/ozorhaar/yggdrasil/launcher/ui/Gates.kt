@@ -92,7 +92,8 @@ private fun Context.readGates(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
     Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.put(g, it) } }
-    runCatching { link.parcels() }.getOrNull()?.let { got -> Lookout.entries.forEach { into.parcel[it] = it in got } }
+    if (com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(this, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.CHEST)) runCatching { link.parcels() }.getOrNull()?.let { got -> Lookout.entries.forEach { into.parcel[it] = it in got } }
+    else into.parcel.clear()
     runCatching { link.steading() }.getOrNull()?.let { into.steading = it }
     runCatching { link.household() }.getOrNull()?.let { homecoming(it, into) }
     into.readAt = System.currentTimeMillis()
@@ -101,6 +102,7 @@ private fun Context.readGates(into: GateStates) {
 private fun Context.readWatchers(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
+    if (!com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(this, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.RAVEN)) { into.seen.clear(); return }
     Lookout.entries.forEach { l -> runCatching { link.seen(l) }.getOrNull()?.let { into.seen[l] = it } }
 }
 
@@ -123,6 +125,7 @@ private fun Context.homecoming(now: Map<String, Pair<Boolean, Long>>, into: Gate
         into.household[id] = home
     }
     ed.apply()
+    if (!com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(this, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.HOMECOMING)) return
     if (arrived) {
         Carved.play(this, Carved.Sound.HOME)
         getSharedPreferences("weather", Context.MODE_PRIVATE).edit().putLong(com.ozorhaar.yggdrasil.launcher.wallpaper.FLARE_PREF, System.currentTimeMillis()).apply()

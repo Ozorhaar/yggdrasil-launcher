@@ -46,6 +46,8 @@ object Carved {
         val am = ctx.getSystemService(AudioManager::class.java)
         if (am.ringerMode != AudioManager.RINGER_MODE_NORMAL) return
         val p = ready(ctx)
-        ids[s]?.let { p.play(it, 0.9f, 0.9f, 1, 0, 1f) }
+        val v = if (s == Sound.HOME || s == Sound.AWAY || s == Sound.OPEN) com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.hornVolume(ctx) else 0.9f
+        if (v <= 0.01f) return
+        ids[s]?.let { p.play(it, v, v, 1, 0, 1f) }
     }
 }

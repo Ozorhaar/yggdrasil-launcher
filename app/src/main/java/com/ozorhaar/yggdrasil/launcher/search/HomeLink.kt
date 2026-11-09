@@ -25,6 +25,20 @@ import javax.crypto.spec.GCMParameterSpec
  * a cover (garage) and run a scene. It never unlocks, opens, or disarms anything.
  */
 class HomeLink(context: Context) {
+    private val appCtx = context.applicationContext
+    private fun cfgIds(e: com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities) =
+        com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.ids(appCtx, e)
+    private fun cfgId(e: com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities) =
+        com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.id(appCtx, e)
+    private val HEARTH_KEEPERS get() = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.PEOPLE).toSet()
+    private val LEAKS get() = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.LEAKS)
+    private val SOLAR get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.SOLAR)
+    private val SOLAR_TODAY get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.SOLAR_TODAY)
+    private val HOUSE_USE get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.HOUSE_USE)
+    private val SMOKER get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.SMOKER)
+    private val PROBE get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.PROBE)
+    private val PRINTER get() = cfgId(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.PRINTER)
+
     private val prefs = context.getSharedPreferences("ygg_home_link", Context.MODE_PRIVATE)
 
     data class Device(val entityId: String, val name: String, val state: String) {
@@ -190,12 +204,12 @@ class HomeLink(context: Context) {
     /** One read of the smoker, the printer and the leak sensors. Blocking. */
     fun steading(): Steading {
         val leaks = LEAKS.mapNotNull { id -> stateOf(id)?.takeIf { it.optString("state") == "on" }?.let { it.attr("friendly_name") ?: id } }
-        val smoker = stateOf("climate.surtur_climate")
+        val smoker = stateOf(SMOKER)
         val smokerOn = smoker?.optString("state")?.let { it !in setOf("off", "unavailable", "unknown", "") } == true
-        val probe = if (smokerOn) stateOf("climate.back_patio_smoker_probe") else null
+        val probe = if (smokerOn) stateOf(PROBE) else null
         val alarm = smokerOn && (stateOf("binary_sensor.surtur_probe_alarm_fired")?.optString("state") == "on" ||
             stateOf("binary_sensor.surtur_cook_timer_complete")?.optString("state") == "on")
-        val print = stateOf("sensor.yggdrasil_print_status")?.optString("state")
+        val print = stateOf(PRINTER)?.optString("state")
         val printing = print == "running" || print == "prepare" || print == "pause"
         return Steading(
             leaks = leaks,
@@ -336,8 +350,8 @@ class HomeLink(context: Context) {
                 id == SOLAR -> solar = st.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
                 id == HOUSE_USE -> use = st.toFloatOrNull() ?: -1f
                 id in LEAKS && st == "on" -> leak = true
-                id == "climate.surtur_climate" -> fire = st !in setOf("off", "unavailable", "unknown", "")
-                id == "sensor.yggdrasil_print_status" -> forge = st == "running" || st == "prepare" || st == "pause"
+                id == SMOKER -> fire = st !in setOf("off", "unavailable", "unknown", "")
+                id == PRINTER -> forge = st == "running" || st == "prepare" || st == "pause"
             }
         }
         // sending power to the grid when the panels make more than the house uses (unknown use: no)
@@ -424,16 +438,6 @@ class HomeLink(context: Context) {
     companion object {
         const val DEFAULT_URL = ""
         const val AGENT = "conversation.hafnir_mac"
-        /** The hearth burns while either of them is home. */
-        private val HEARTH_KEEPERS = setOf("person.ozorhaar", "person.leah")
-        /** Solar output in watts (lights the longship's sail). */
-        private const val SOLAR = "sensor.solar_power"
-        /** What the house is using, in watts (Sense). */
-        private const val HOUSE_USE = "sensor.sense_monitor_total_power"
-        /** The water-leak sensors (a wet one floods the longhouse's footing). */
-        private val LEAKS = listOf("binary_sensor.bathroomsls_water_leak", "binary_sensor.kitchenls_water_leak", "binary_sensor.upstairstls_water_leak")
-        /** Today's solar generation, kWh (resets at midnight). */
-        private const val SOLAR_TODAY = "sensor.solar_generation"
         /** The only cameras the launcher may ask Home Assistant for. */
         private val CAMERAS = Lookout.entries.map { it.camera }.toSet()
         private const val KEY_ALIAS = "ygg_home_link"

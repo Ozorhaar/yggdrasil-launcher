@@ -53,6 +53,7 @@ object Hoard {
         val app = ctx.applicationContext as YggApp
         val layout = app.layout.exportJson()
         if (app.watch.widgetId >= 0) layout.put("watch", app.watch.provider)
+        layout.put("steading", com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.export(ctx))
         val sealed = seal(ctx, layout.toString().toByteArray())
         val c = URL(URL_UPLOAD).openConnection() as HttpURLConnection
         try {

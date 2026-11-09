@@ -186,7 +186,7 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
         scope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(layout.exportJson().toString(2).toByteArray()) }
+                    ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(layout.exportJson().put("steading", com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.export(ctx)).toString(2).toByteArray()) }
                 }
             }
             Toast.makeText(ctx, if (r.isSuccess) "Layout saved" else "Couldn't save: ${r.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
@@ -209,6 +209,8 @@ internal fun BackupSection(layout: LayoutStore, onDone: () -> Unit) {
                     else { runCatching { ygg.widgetHost.deleteAppWidgetId(id) }; null }
                 }
                 oldIds.forEach { id -> ygg.widgetViews.remove(id); if (id >= 0) runCatching { ygg.widgetHost.deleteAppWidgetId(id) } }
+                // the steading's settings come back too
+                JSONObject(text).optJSONObject("steading")?.let { com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.import(ctx, it) }
                 // the hidden watch widget (on-call rune) comes back too
                 JSONObject(text).optString("watch").takeIf { it.isNotBlank() }?.let { provider ->
                     ComponentName.unflattenFromString(provider)?.let { cn ->

@@ -200,7 +200,7 @@ fun LauncherRoot() {
             val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
             val day = "%d-%d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.DAY_OF_YEAR))
             val sp = ctx.getSharedPreferences("ygg_saga", android.content.Context.MODE_PRIVATE)
-            if (hour in 5..11 && sp.getString("day", "") != day) {
+            if (hour in 5..11 && sp.getString("day", "") != day && com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.SAGA)) {
                 sp.edit().putString("day", day).apply()
                 sagaOpen = true
             }
@@ -1039,7 +1039,7 @@ private fun Dock(
             }
         }
         // Heimdall's mark, set into the foot of the band
-        if (layout.dockRunes && homeLinked) {
+        if (layout.dockRunes && homeLinked && com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(LocalContext.current, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.HEIMDALL)) {
             HeimdallGem(
                 heimdall.hornColor(),
                 Modifier.align(Alignment.BottomCenter).offset(y = 4.dp)
@@ -1702,6 +1702,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
         StatusLine(if (ctx.badgeAccessGranted()) "On" else "Needs notification access")
         RuneButton("Open notification access") { ctx.openSettings(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }
 
+        SteadingSection()
         PrivacySection(layout)
         SearchSection()
         BackupSection(layout, onDone = onClose)

@@ -110,6 +110,7 @@ fun rememberHeimdall(): Heimdall.Report? {
     LaunchedEffect(owner) {
         owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
+                if (!com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.HEIMDALL)) { report = null; delay(60_000L); continue }
                 report = withContext(Dispatchers.IO) { Heimdall.look(ctx) }
                 delay(2 * 60_000L)
             }
