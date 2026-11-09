@@ -99,6 +99,9 @@ class FjordScene(ctx: Context) {
 
     var weather: Weather.Now? = Weather.cached(ctx)
 
+    /** Tonight's planetary Kp from NOAA: the northern lights follow it (none on quiet nights). */
+    var kp: Float = Weather.kpCached(ctx)
+
     /** What the house is doing, from Home Assistant (null = unknown: the steading is drawn dark). */
     data class House(
         val lightsOn: Boolean,
@@ -110,6 +113,12 @@ class FjordScene(ctx: Context) {
         val solarW: Float = 0f,
         /** Power going out to the grid (solar beyond what the house uses), watts; the oars row while it flows. */
         val exportW: Float = 0f,
+        /** A leak sensor is wet: water rises around the longhouse and the hall glows ember. */
+        val leak: Boolean = false,
+        /** Surtur the smoker is lit: a cooking fire burns on the hillside. */
+        val fire: Boolean = false,
+        /** The Bambu printer is working: sparks fly from the forge chimney. */
+        val forge: Boolean = false,
     ) {
         /** Neither Jason nor Leah is home: the longship is away. */
         val away: Boolean get() = !hearth
@@ -128,6 +137,16 @@ class FjordScene(ctx: Context) {
         private set
 
     private val land: Bitmap = levelHilltop(decode(ctx, R.drawable.fjord_land))
+    /** The top of the ground in each column of the mountain art (after levelling). */
+    private val groundTops: IntArray = IntArray(land.width).also { tops ->
+        val col = IntArray(land.height)
+        for (x in 0 until land.width) {
+            land.getPixels(col, 0, 1, x, 0, 1, land.height)
+            var y = 0
+            while (y < land.height && (col[y] ushr 24) < 128) y++
+            tops[x] = y
+        }
+    }
     private val ship: Bitmap = decode(ctx, R.drawable.fjord_ship)
     private val sail: Bitmap? = sailMask(ship)
     private val ray: Bitmap = auroraRay()
@@ -295,7 +314,8 @@ class FjordScene(ctx: Context) {
 
         // northern lights
         val night = floor((now - 12 * 3600_000L) / 86_400_000.0)
-        val auroraNight = if (demo != null) demo.third else 0.35f + 0.65f * frac(sin(night * 12.9898) * 43758.5453).toFloat()
+        // real space weather: nothing below Kp 4, faint at 4, a fair chance from Ohio at 6, full from 8
+        val auroraNight = if (demo != null) demo.third else if (kp < 4f) 0f else min(1f, 0.15f + (kp - 4f) * 0.25f)
         val auroraA = auroraNight * ((p.dark - 0.65f) / 0.35f).coerceIn(0f, 1f) * (1 - cloud * 2.2f).coerceIn(0f, 1f)
         if (auroraA > 0.03f) drawAurora(c, w, h, t, auroraA, skyPar)
 
@@ -449,10 +469,10 @@ class FjordScene(ctx: Context) {
         val smoke = house?.hearth == true
         frameMs = when {
             animating || sailing -> 66L
-            smoke || rowing -> 125L
+            smoke || rowing || house?.leak == true || house?.fire == true || house?.forge == true -> 125L
             else -> 60_000L
         }
-        animating = animating || smoke || sailing || rowing
+        animating = animating || smoke || sailing || rowing || house?.leak == true || house?.fire == true || house?.forge == true
         house = realHouse
     }
 
@@ -596,6 +616,80 @@ class FjordScene(ctx: Context) {
                 c.drawBitmap(puff, null, rect, paint)
             }
             paint.colorFilter = null; paint.alpha = 255
+        }
+
+        // the forge: while the printer works, a stone chimney near the hall's right end throws sparks
+        if (h?.forge == true) {
+            val cx = r - 72 * s; val ctop = ridge + 6 * s
+            paint.color = mix(0xFF2A2C30.toInt(), 0xFF6A6660.toInt(), light)
+            c.drawRect(cx - 7 * s, ctop - 18 * s, cx + 7 * s, ctop + 14 * s, paint)
+            val heat = 0.75f + 0.25f * sin(t * 0.011f)
+            paint.shader = RadialGradient(cx, ctop - 18 * s, 22 * s, intArrayOf(argb((0.4f + 0.4f * dark) * heat, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(cx, ctop - 18 * s, 22 * s, paint); paint.shader = null
+            for (i in 0 until 10) {
+                val life = 1600f
+                val age = ((t + i * 397f) % life) / life
+                val sx = cx + sin(i * 2.3f + age * 5f) * 10 * s + (i % 3 - 1) * age * 14 * s
+                val sy = ctop - 20 * s - age * 70 * s
+                paint.color = argb((1 - age) * 0.95f, if (i % 2 == 0) 0xFFECD08F.toInt() else 0xFFE0703A.toInt())
+                c.drawCircle(sx, sy, (1.8f - age) * s * 1.4f, paint)
+            }
+        }
+
+        // Surtur's fire: while the smoker is lit, a cooking fire with a spit on the hillside below the lantern
+        if (h?.fire == true) {
+            val artX = (HALL_L - 70f).toInt().coerceIn(0, groundTops.size - 1)
+            val fx = x(artX.toFloat()); val fy = y(groundTops[artX].toFloat()) + 2 * s
+            paint.shader = RadialGradient(fx, fy - 8 * s, 40 * s, intArrayOf(argb(0.35f + 0.45f * dark, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(fx, fy - 8 * s, 40 * s, paint); paint.shader = null
+            // stones of the pit
+            paint.color = mix(0xFF1A1C20.toInt(), 0xFF4A4846.toInt(), light)
+            for (k in -2..2) c.drawCircle(fx + k * 6 * s, fy, 3.2f * s, paint)
+            // three flickering tongues of flame
+            for (k in 0 until 3) {
+                val fl = 0.7f + 0.3f * sin(t * (0.013f + k * 0.004f) + k * 2f)
+                val fh = (16 + 6 * (k % 2)) * s * fl
+                val bx = fx + (k - 1) * 6 * s
+                path.reset()
+                path.moveTo(bx - 5 * s, fy - 1 * s)
+                path.quadTo(bx - 4 * s, fy - fh * 0.6f, bx + sin(t * 0.009f + k) * 2 * s, fy - fh)
+                path.quadTo(bx + 4 * s, fy - fh * 0.6f, bx + 5 * s, fy - 1 * s)
+                path.close()
+                paint.color = argb(0.9f, if (k == 1) 0xFFECD08F.toInt() else 0xFFE0703A.toInt())
+                c.drawPath(path, paint)
+            }
+            // the spit: two forked posts and a bar with the roast
+            paint.color = mix(0xFF120E0B.toInt(), 0xFF3A2C20.toInt(), light)
+            paint.style = Paint.Style.STROKE; paint.strokeWidth = 2.4f * s; paint.strokeCap = Paint.Cap.ROUND
+            for (side in listOf(-1, 1)) {
+                val sx = fx + side * 18 * s
+                c.drawLine(sx, fy, sx, fy - 24 * s, paint)
+                c.drawLine(sx, fy - 24 * s, sx - 3 * s, fy - 28 * s, paint)
+                c.drawLine(sx, fy - 24 * s, sx + 3 * s, fy - 28 * s, paint)
+            }
+            c.drawLine(fx - 22 * s, fy - 25 * s, fx + 22 * s, fy - 25 * s, paint)
+            paint.style = Paint.Style.FILL
+            c.drawOval(fx - 8 * s, fy - 30 * s, fx + 8 * s, fy - 20 * s, paint)
+        }
+
+        // a leak: water rises about the hall's footing, and the hall glows ember
+        if (h?.leak == true) {
+            val beat = 0.5f + 0.5f * sin(t * 0.006f)
+            paint.style = Paint.Style.STROKE; paint.strokeWidth = 3f * s
+            paint.color = argb(0.45f + 0.45f * beat, 0xFFE0703A.toInt())
+            c.drawRect(l, wallTop, r, base, paint)
+            paint.style = Paint.Style.FILL
+            path.reset()
+            val wl = l - 40 * s; val wr = landX + 1440 * k
+            path.moveTo(wl, base + 10 * s)
+            var xx = wl
+            while (xx <= wr) {
+                path.lineTo(xx, base - 8 * s + sin(xx / (14 * s) + t * 0.004f) * 3 * s)
+                xx += 6 * s
+            }
+            path.lineTo(wr, base + 10 * s); path.close()
+            paint.color = argb(0.55f, 0xFF4F86A8.toInt())
+            c.drawPath(path, paint)
         }
     }
 

@@ -121,6 +121,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.ozorhaar.yggdrasil.launcher.applyYggWallpaper
 import com.ozorhaar.yggdrasil.launcher.badgeAccessGranted
 import com.ozorhaar.yggdrasil.launcher.data.AppEntry
@@ -185,6 +186,24 @@ fun LauncherRoot() {
     var sideDoorRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var garageRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     val gates = rememberGates()
+    val heimdall = rememberHeimdall()
+    var heimdallOpen by remember { mutableStateOf(false) }
+    var steadingOpen by remember { mutableStateOf(false) }
+    var sagaOpen by remember { mutableStateOf(false) }
+    // the morning saga: once a day, the first time the home screen shows between 5 and 11
+    val sagaOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(sagaOwner) {
+        sagaOwner.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            val cal = java.util.Calendar.getInstance()
+            val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+            val day = "%d-%d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.DAY_OF_YEAR))
+            val sp = ctx.getSharedPreferences("ygg_saga", android.content.Context.MODE_PRIVATE)
+            if (hour in 5..11 && sp.getString("day", "") != day) {
+                sp.edit().putString("day", day).apply()
+                sagaOpen = true
+            }
+        }
+    }
     val homeLinkReady = ygg.homeLink.configured
     var peekGate by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Lookout?>(null) }
     /** Where the raven sits on the longhouse roof (null while it isn't there). */
@@ -529,7 +548,12 @@ fun LauncherRoot() {
                         if (openFolder == null && steadingHit(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val look = gates.watching() ?: gates.parcelAt()
-                            if (look != null && homeLinkReady) peekGate = look else ctx.openHomeAssistant()
+                            when {
+                                // more than a camera to show (a leak, the smoker, the forge): the whole steading
+                                homeLinkReady && gates.steading?.busy == true -> steadingOpen = true
+                                look != null && homeLinkReady -> peekGate = look
+                                else -> ctx.openHomeAssistant()
+                            }
                             return@detectTapGestures
                         }
                         // the marks on the band: settings (left), Hafnir (right)
@@ -558,6 +582,14 @@ fun LauncherRoot() {
                         if (bridge != null && bridgeRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             Bridge.open(ctx)
+                            return@detectTapGestures
+                        }
+                        // Gjallarhorn at the foot of the rune band: Heimdall's report on the homelab
+                        val dpx = ctx.resources.displayMetrics.density
+                        if (layout.dockRunes && dockRect.width > 0f && kotlin.math.abs(p.x - dockRect.center.x) < 40 * dpx &&
+                            p.y > dockRect.bottom - 22 * dpx && p.y < dockRect.bottom + 10 * dpx) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            heimdallOpen = true
                             return@detectTapGestures
                         }
                         if (iconAt(p) || !dockRect.contains(p)) return@detectTapGestures
@@ -666,7 +698,7 @@ fun LauncherRoot() {
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
             Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it },
                 onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it },
-                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it })
+                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it }, heimdall = heimdall)
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -758,6 +790,12 @@ fun LauncherRoot() {
             )
         }
         peekGate?.let { g -> CameraPeek(g, gates) { peekGate = null } }
+        if (heimdallOpen) HeimdallSheet(heimdall) { heimdallOpen = false }
+        if (steadingOpen) SteadingSheet(
+            gates.steading, gates.watching(), gates.parcelAt(),
+            onLook = { peekGate = it }, onClose = { steadingOpen = false },
+        )
+        if (sagaOpen) MorningSaga(gates) { sagaOpen = false }
         widgetMenu?.let { id -> layout.widgets.firstOrNull { it.id == id } }?.let { spot ->
             WidgetSheet(
                 spot, layout,
@@ -933,6 +971,7 @@ private fun Dock(
     gates: GateStates? = null,
     onSideDoorPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     onGaragePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    heimdall: Heimdall.Report? = null,
 ) {
     val homeLinked = LocalContext.current.ygg.homeLink.configured
     // the rune band doubles as the battery gauge; a light runs along it while charging
@@ -952,7 +991,7 @@ private fun Dock(
                 .fillMaxWidth()
                 .background(Ygg.Night.copy(alpha = 0.55f), RoundedCornerShape(34.dp))
                 .then(
-                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold) { BandGauge(battery.first, battery.second, sweep?.value ?: 0f) }.padding(horizontal = 12.dp, vertical = 14.dp)
+                    if (layout.dockRunes) Modifier.runeBorder(34.dp, 14.dp, Dusk.gold, gauge = { BandGauge(battery.first, battery.second, sweep?.value ?: 0f) }, horn = { heimdall.hornColor() }).padding(horizontal = 12.dp, vertical = 14.dp)
                     else Modifier.border(1.dp, Ygg.Gold.copy(alpha = 0.35f), RoundedCornerShape(34.dp)).padding(vertical = 6.dp)
                 ),
             horizontalArrangement = Arrangement.SpaceEvenly,

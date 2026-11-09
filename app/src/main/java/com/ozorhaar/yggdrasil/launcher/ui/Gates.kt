@@ -54,6 +54,9 @@ class GateStates {
     /** Doors where Frigate sees someone right now (the raven on the roof). */
     val seen = mutableStateMapOf<Lookout, Boolean>()
 
+    /** The smoker, the printer and the leak sensors (null until first read). */
+    var steading by androidx.compose.runtime.mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Steading?>(null)
+
     /** Doors where Frigate sees a package waiting (the chest at the longhouse door). */
     val parcel = mutableStateMapOf<Lookout, Boolean>()
 
@@ -87,6 +90,7 @@ private fun Context.readGates(into: GateStates) {
     if (!link.configured) return
     Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.put(g, it) } }
     runCatching { link.parcels() }.getOrNull()?.let { got -> Lookout.entries.forEach { into.parcel[it] = it in got } }
+    runCatching { link.steading() }.getOrNull()?.let { into.steading = it }
     into.readAt = System.currentTimeMillis()
 }
 

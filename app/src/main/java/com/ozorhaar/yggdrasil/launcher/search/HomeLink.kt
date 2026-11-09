@@ -163,6 +163,81 @@ class HomeLink(context: Context) {
         }
     }
 
+    /** What's going on around the steading, for the longhouse's sheet (all read only). */
+    data class Steading(
+        /** Leak sensors that are wet, by name. */
+        val leaks: List<String> = emptyList(),
+        /** Surtur the smoker: running, its temperature and target, the meat probe and its target, pellets. */
+        val smokerOn: Boolean = false,
+        val smokerTemp: String? = null, val smokerTarget: String? = null,
+        val probeTemp: String? = null, val probeTarget: String? = null,
+        val pellets: String? = null,
+        /** The probe alarm or the cook timer has gone off. */
+        val smokerAlarm: Boolean = false,
+        /** The Bambu printer (named Yggdrasil): printing, progress %, layer of layers. */
+        val printing: Boolean = false, val printProgress: Int = 0,
+        val layer: String? = null, val layers: String? = null,
+    ) {
+        val busy: Boolean get() = leaks.isNotEmpty() || smokerOn || printing
+    }
+
+    private fun stateOf(id: String): JSONObject? =
+        runCatching { JSONObject(request(url, token(), "GET", "/api/states/$id", null)) }.getOrNull()
+
+    private fun JSONObject.attr(k: String): String? =
+        optJSONObject("attributes")?.opt(k)?.takeIf { it != JSONObject.NULL }?.toString()
+
+    /** One read of the smoker, the printer and the leak sensors. Blocking. */
+    fun steading(): Steading {
+        val leaks = LEAKS.mapNotNull { id -> stateOf(id)?.takeIf { it.optString("state") == "on" }?.let { it.attr("friendly_name") ?: id } }
+        val smoker = stateOf("climate.surtur_climate")
+        val smokerOn = smoker?.optString("state")?.let { it !in setOf("off", "unavailable", "unknown", "") } == true
+        val probe = if (smokerOn) stateOf("climate.back_patio_smoker_probe") else null
+        val alarm = smokerOn && (stateOf("binary_sensor.surtur_probe_alarm_fired")?.optString("state") == "on" ||
+            stateOf("binary_sensor.surtur_cook_timer_complete")?.optString("state") == "on")
+        val print = stateOf("sensor.yggdrasil_print_status")?.optString("state")
+        val printing = print == "running" || print == "prepare" || print == "pause"
+        return Steading(
+            leaks = leaks,
+            smokerOn = smokerOn,
+            smokerTemp = smoker?.attr("current_temperature"), smokerTarget = smoker?.attr("temperature"),
+            probeTemp = probe?.attr("current_temperature"), probeTarget = probe?.attr("temperature"),
+            pellets = if (smokerOn) stateOf("sensor.surtur_pellet_level")?.optString("state") else null,
+            smokerAlarm = alarm,
+            printing = printing,
+            printProgress = if (printing) stateOf("sensor.yggdrasil_print_progress")?.optString("state")?.toFloatOrNull()?.toInt() ?: 0 else 0,
+            layer = if (printing) stateOf("sensor.yggdrasil_current_layer")?.optString("state") else null,
+            layers = if (printing) stateOf("sensor.yggdrasil_total_layer_count")?.optString("state") else null,
+        )
+    }
+
+    /** Yesterday's solar generation in kWh (the most the daily counter reached), or null. Blocking. */
+    fun solarYesterday(): Float? = runCatching {
+        val tz = java.util.TimeZone.getDefault()
+        val cal = java.util.Calendar.getInstance(tz).apply {
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val end = cal.timeInMillis; val start = end - 24 * 3600_000L
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", java.util.Locale.US)
+        fun enc(ms: Long) = java.net.URLEncoder.encode(fmt.format(java.util.Date(ms)), "UTF-8")
+        val body = request(url, token(), "GET",
+            "/api/history/period/${enc(start)}?end_time=${enc(end)}&filter_entity_id=$SOLAR_TODAY&minimal_response&no_attributes", null)
+        val rows = JSONArray(body).optJSONArray(0) ?: return null
+        (0 until rows.length()).mapNotNull { rows.getJSONObject(it).optString("state").toFloatOrNull() }.maxOrNull()
+    }.getOrNull()
+
+    /**
+     * Hafnir's voice: asks Home Assistant to speak [text] with the same Piper voice his pipeline
+     * uses, and returns a URL to the audio. Blocking.
+     */
+    fun speechUrl(text: String): String {
+        val body = JSONObject().put("engine_id", "tts.piper_2").put("message", text).put("language", "en_GB")
+            .put("options", JSONObject().put("voice", "en_GB-northern_english_male-medium"))
+        val r = JSONObject(request(url, token(), "POST", "/api/tts_get_url", body.toString()))
+        val path = r.optString("path").ifBlank { java.net.URL(r.getString("url")).path }
+        return url + path
+    }
+
     private var parcelIds: Map<Lookout, List<String>> = emptyMap()
     private var parcelIdsAt = 0L
 
@@ -217,6 +292,7 @@ class HomeLink(context: Context) {
     fun glance(): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House {
         val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
         var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f; var use = -1f
+        var leak = false; var fire = false; var forge = false
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val id = o.optString("entity_id"); val st = o.optString("state")
@@ -232,11 +308,14 @@ class HomeLink(context: Context) {
                 }
                 id == SOLAR -> solar = st.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f
                 id == HOUSE_USE -> use = st.toFloatOrNull() ?: -1f
+                id in LEAKS && st == "on" -> leak = true
+                id == "climate.surtur_climate" -> fire = st !in setOf("off", "unavailable", "unknown", "")
+                id == "sensor.yggdrasil_print_status" -> forge = st == "running" || st == "prepare" || st == "pause"
             }
         }
         // sending power to the grid when the panels make more than the house uses (unknown use: no)
         val export = if (use >= 0f) solar - use else 0f
-        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar, export)
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar, export, leak, fire, forge)
     }
 
     /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */
@@ -318,6 +397,10 @@ class HomeLink(context: Context) {
         private const val SOLAR = "sensor.solar_power"
         /** What the house is using, in watts (Sense). */
         private const val HOUSE_USE = "sensor.sense_monitor_total_power"
+        /** The water-leak sensors (a wet one floods the longhouse's footing). */
+        private val LEAKS = listOf("binary_sensor.bathroomsls_water_leak", "binary_sensor.kitchenls_water_leak", "binary_sensor.upstairstls_water_leak")
+        /** Today's solar generation, kWh (resets at midnight). */
+        private const val SOLAR_TODAY = "sensor.solar_generation"
         /** The only cameras the launcher may ask Home Assistant for. */
         private val CAMERAS = Lookout.entries.map { it.camera }.toSet()
         private const val KEY_ALIAS = "ygg_home_link"

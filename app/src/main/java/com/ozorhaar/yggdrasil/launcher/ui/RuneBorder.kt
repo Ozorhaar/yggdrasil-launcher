@@ -83,8 +83,14 @@ class BandGauge(val level: Float, val charging: Boolean, val sweep: Float)
  * With a [gauge], the runes light gold from left to right as far as the battery's level
  * (ember below 20%), the rest dim, and a frost light runs along the lit runes while charging.
  */
-fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color, gauge: (() -> BandGauge?)? = null): Modifier = drawBehind {
+fun Modifier.runeBorder(
+    radius: Dp, band: Dp, color: Color,
+    gauge: (() -> BandGauge?)? = null,
+    /** Gjallarhorn, carved at the foot of the band in this colour (Heimdall's watch); null for none. */
+    horn: (() -> Color?)? = null,
+): Modifier = drawBehind {
     val g = gauge?.invoke()
+    val hornColor = horn?.invoke()
     val bandPx = band.toPx()
     val line = 1.dp(this)
     val outer = line
@@ -114,6 +120,8 @@ fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color, gauge: (() -> BandGa
     val litStroke = Stroke(width = 1.5f * line, cap = StrokeCap.Round)
     for (i in 0 until count) {
         val (pos, angle) = path.at(i * gap)
+        // leave the foot of the band clear for the horn
+        if (hornColor != null && kotlin.math.abs(angle - 180f) < 1f && kotlin.math.abs(pos.x - size.width / 2) < glyphH * 2.2f) continue
         // with the battery gauge: lit up to the level, dim beyond; a frost light runs while charging
         var c = color.copy(alpha = 0.8f); var dot = color.copy(alpha = 0.7f); var st = stroke
         if (g != null) {
@@ -139,6 +147,20 @@ fun Modifier.runeBorder(radius: Dp, band: Dp, color: Color, gauge: (() -> BandGa
             }
         }
     }
+    if (hornColor != null) drawHorn(size.width / 2, size.height - mid, glyphH, hornColor)
+}
+
+/** Gjallarhorn lying along the band's foot, centred on (cx, y), mouth to the left, glyph height [g]. */
+private fun DrawScope.drawHorn(cx: Float, y: Float, g: Float, color: Color) {
+    val path = androidx.compose.ui.graphics.Path().apply {
+        moveTo(cx - 1.7f * g, y - 0.15f * g)
+        quadraticTo(cx - 0.2f * g, y + 0.75f * g, cx + 1.6f * g, y - 0.35f * g)
+    }
+    drawPath(path, color, style = Stroke(width = 0.22f * g, cap = StrokeCap.Round))
+    // the bell and two bands of the horn
+    drawLine(color, Offset(cx - 1.75f * g, y - 0.5f * g), Offset(cx - 1.6f * g, y + 0.25f * g), 0.2f * g, StrokeCap.Round)
+    drawLine(color, Offset(cx - 0.6f * g, y + 0.05f * g), Offset(cx - 0.5f * g, y + 0.45f * g), 0.12f * g, StrokeCap.Round)
+    drawLine(color, Offset(cx + 0.6f * g, y - 0.05f * g), Offset(cx + 0.75f * g, y + 0.3f * g), 0.12f * g, StrokeCap.Round)
 }
 
 internal fun DrawScope.drawRune(segs: List<FloatArray>, w: Float, h: Float, color: Color, stroke: Stroke) {

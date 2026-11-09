@@ -77,9 +77,11 @@ fun SkyCardView() {
     // storm warnings from the National Weather Service: the shield pulses ember, tap for the words
     var alerts by remember { mutableStateOf<List<Weather.Alert>>(emptyList()) }
     var showAlerts by remember { mutableStateOf(false) }
+    var kp by remember { mutableStateOf(Weather.kpCached(ctx)) }
     LaunchedEffect(Unit) {
         while (true) {
             alerts = withContext(Dispatchers.IO) { Weather.alerts(ctx) }
+            kp = withContext(Dispatchers.IO) { Weather.kp(ctx) }
             delay(10 * 60 * 1000L)
         }
     }
@@ -131,6 +133,10 @@ fun SkyCardView() {
             if (warn) Text(
                 alerts.first().event + if (alerts.size > 1) " · +${alerts.size - 1} more" else "", maxLines = 1,
                 style = TextStyle(color = Ygg.Ember, fontSize = 13.sp, fontFamily = Ygg.Runic),
+                modifier = Modifier.rollIfLong(),
+            ) else if (kp >= 6f && !n.isDay) Text(
+                "Northern lights possible tonight · Kp ${"%.0f".format(kp)}", maxLines = 1,
+                style = TextStyle(color = Ygg.Frost, fontSize = 13.sp, fontFamily = Ygg.Runic),
                 modifier = Modifier.rollIfLong(),
             ) else Text(
                 "${n.words} · $sun", maxLines = 1,

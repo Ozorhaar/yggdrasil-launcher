@@ -118,6 +118,15 @@ private fun nineCalendars(ctx: Context): List<Long> {
     return ids
 }
 
+/** Today's remaining events from Nine, as ("3:00 PM", "title") pairs, for the morning saga. */
+internal fun nornsToday(ctx: Context): List<Pair<String, String>> {
+    val now = System.currentTimeMillis()
+    val end = Calendar.getInstance().apply {
+        timeInMillis = now; set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59)
+    }.timeInMillis
+    return upcoming(ctx, 6).filter { it.begin <= end }.map { whenText(it, now).ifBlank { "Today" } to it.title }
+}
+
 /** "Now", "3:00 PM", "Tomorrow 9:30 AM", "Wed 2:00 PM", "Fri" (all day). */
 private fun whenText(t: Thread, now: Long): String {
     if (t.begin <= now && now < t.end && !t.allDay) return "Now"

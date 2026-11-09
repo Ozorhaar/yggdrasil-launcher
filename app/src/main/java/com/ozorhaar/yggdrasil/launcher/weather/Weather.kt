@@ -147,6 +147,36 @@ object Weather {
         return fresh
     }
 
+    /**
+     * Tonight's geomagnetic activity: the highest planetary Kp NOAA's Space Weather Prediction
+     * Center forecasts from three hours ago to twelve hours ahead (free, no account, nothing about
+     * the phone is sent). Cached for 30 minutes; the last value, however old, if unreachable.
+     * From Ohio, Kp 5 can show low in the north, 6 to 7 is a real chance, 8 or more overhead.
+     */
+    fun kp(ctx: Context): Float {
+        val p = prefs(ctx)
+        val at = p.getLong("kp_at", 0L)
+        if (System.currentTimeMillis() - at < 30 * 60_000L) return p.getFloat("kp", 2f)
+        val fresh = runCatching {
+            val conn = URL("https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json").openConnection() as HttpURLConnection
+            conn.connectTimeout = 8000; conn.readTimeout = 8000; conn.instanceFollowRedirects = false
+            val body = try { conn.inputStream.bufferedReader().use { it.readText() } } finally { conn.disconnect() }
+            val arr = org.json.JSONArray(body)
+            val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            val now = System.currentTimeMillis()
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val t = runCatching { fmt.parse(o.optString("time_tag"))?.time }.getOrNull() ?: return@mapNotNull null
+                if (t in (now - 3 * 3600_000L)..(now + 12 * 3600_000L)) o.optDouble("kp", Double.NaN).takeIf { !it.isNaN() } else null
+            }.maxOrNull()?.toFloat()
+        }.getOrNull()
+        if (fresh != null) p.edit().putFloat("kp", fresh).putLong("kp_at", System.currentTimeMillis()).apply()
+        return fresh ?: p.getFloat("kp", 2f)
+    }
+
+    /** The last Kp read, without fetching (for drawing). */
+    fun kpCached(ctx: Context): Float = prefs(ctx).getFloat("kp", 2f)
+
     private fun parse(o: JSONObject) = Now(
         tempF = o.getInt("t"), highF = o.getInt("hi"), lowF = o.getInt("lo"), code = o.getInt("code"),
         isDay = o.getBoolean("day"), sunrise = o.getLong("rise"), sunset = o.getLong("set"), fetchedAt = o.getLong("at"),

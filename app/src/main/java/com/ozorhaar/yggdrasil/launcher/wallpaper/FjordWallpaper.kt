@@ -103,8 +103,10 @@ class FjordWallpaper : WallpaperService() {
             lastWeather = now
             thread {
                 val w = Weather.get(applicationContext)
+                val kp = Weather.kp(applicationContext)
                 handler.post {
                     scene?.weather = w
+                    scene?.kp = kp
                     if (visible) drawFrame()
                 }
             }
