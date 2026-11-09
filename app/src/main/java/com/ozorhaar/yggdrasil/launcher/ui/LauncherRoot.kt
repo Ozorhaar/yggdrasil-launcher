@@ -449,6 +449,14 @@ fun LauncherRoot() {
         }
     }
 
+    /** Whether a point falls on the steading on the hill (the wallpaper's longhouse). */
+    fun steadingHit(p: Offset): Boolean {
+        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return false
+        val n = layout.pages.size
+        val x = if (n > 1) ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
+    }
+
     val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null || peekGate != null ||
         homeMenu || widgetPicker || widgetMenu != null
 
@@ -465,8 +473,8 @@ fun LauncherRoot() {
                     if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null || peekGate != null)
                         return@awaitEachGesture
                     // a tap on the raven is the raven's, not the icon's under it
-                    if (openFolder == null && ravenRect?.contains(down.position) == true) return@awaitEachGesture
-                    if (openFolder == null && chestRect?.contains(down.position) == true) return@awaitEachGesture
+                    // a tap on the longhouse is the longhouse's, not an icon's under it
+                    if (openFolder == null && steadingHit(down.position)) return@awaitEachGesture
                     val widget = if (openFolder == null) drag.widgetAt(down.position, pager.currentPage) else null
                     val loc = if (widget != null) null else drag.hit(down.position, pager.currentPage, openFolder)
                     val item = loc?.let { layout.itemAt(it) }
@@ -516,18 +524,12 @@ fun LauncherRoot() {
                 detectTapGestures(
                     // a tap on the dock's rune band (not an icon) wakes Hafnir
                     onTap = { p ->
-                        // the raven on the roof: look through the camera at whoever it's watching
-                        val raven = gates.watching()
-                        if (raven != null && openFolder == null && ravenRect?.contains(p) == true) {
+                        // the longhouse: the raven's camera if it's watching someone, else the
+                        // chest's door if a package waits, else the Home Assistant app
+                        if (openFolder == null && steadingHit(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            peekGate = raven
-                            return@detectTapGestures
-                        }
-                        // the chest at the door: look at the package through that door's camera
-                        val chest = gates.parcelAt()
-                        if (chest != null && openFolder == null && chestRect?.contains(p) == true) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            peekGate = chest
+                            val look = gates.watching() ?: gates.parcelAt()
+                            if (look != null && homeLinkReady) peekGate = look else ctx.openHomeAssistant()
                             return@detectTapGestures
                         }
                         // the marks on the band: settings (left), Hafnir (right)
@@ -844,7 +846,7 @@ private fun HomeGrid(
     HorizontalPager(state = pager, userScrollEnabled = !drag.active, modifier = Modifier.fillMaxSize()) { pageIdx ->
         val page = layout.pages.getOrNull(pageIdx) ?: return@HorizontalPager
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-            val iconSize = minOf(maxWidth / cols * 0.62f, 60.dp)
+            val iconSize = minOf(maxWidth / cols * 0.62f, 60.dp) * ICON_SCALE
             val cellW = maxWidth / cols
             val cellH = maxHeight / rows
             Column(Modifier.fillMaxSize()) {
@@ -959,7 +961,7 @@ private fun Dock(
             layout.dock.forEachIndexed { i, key ->
                 val loc = Loc.Dock(i)
                 Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
-                    SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
+                    SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp * ICON_SCALE, false)
                 }
             }
         }
@@ -1117,7 +1119,7 @@ private fun FolderPopup(
                             if (key == null) Spacer(cell)
                             else Box(cell.dropCell(drag, Loc.InFolder(folder.id, idx)), contentAlignment = Alignment.Center) {
                                 byKey[key]?.let { app ->
-                                    AppTile(app, icons, badges[app.packageName] ?: 0, layout.runicLabels, 52.dp)
+                                    AppTile(app, icons, badges[app.packageName] ?: 0, layout.runicLabels, 52.dp * ICON_SCALE)
                                 }
                             }
                         }
@@ -1331,7 +1333,7 @@ private fun AppDrawer(
                 items(shown, key = { it.key }) { app ->
                     Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
                         AppTile(
-                            app, icons, badges[app.packageName] ?: 0, runic, 54.dp,
+                            app, icons, badges[app.packageName] ?: 0, runic, 54.dp * ICON_SCALE,
                             onClick = { keyboard?.hide(); onLaunch(app) },
                             onLongClick = { onLong(app) },
                         )
@@ -1735,4 +1737,16 @@ fun RuneButton(text: String, onClick: () -> Unit) {
     ) {
         RuneText(text, 16.sp, Ygg.Gold)
     }
+}
+
+
+/** Icons a fifth smaller than the launcher's original size, everywhere. */
+private const val ICON_SCALE = 0.8f
+
+/** Opens the Home Assistant companion app (full or minimal build). */
+private fun android.content.Context.openHomeAssistant() {
+    val pkgs = listOf("io.homeassistant.companion.android", "io.homeassistant.companion.android.minimal")
+    val intent = pkgs.firstNotNullOfOrNull { packageManager.getLaunchIntentForPackage(it) }
+    if (intent != null) runCatching { startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    else Toast.makeText(this, "Home Assistant app isn't installed", Toast.LENGTH_SHORT).show()
 }
