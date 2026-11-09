@@ -13,7 +13,13 @@ import com.ozorhaar.yggdrasil.launcher.R
  * They play on the system-sounds volume and stay silent when the phone is on silent or vibrate.
  */
 object Carved {
-    enum class Sound(val res: Int) { SECURE(R.raw.ygg_secure), OPEN(R.raw.ygg_open), FOLDER(R.raw.ygg_folder) }
+    enum class Sound(val res: Int) {
+        SECURE(R.raw.ygg_secure), OPEN(R.raw.ygg_open), FOLDER(R.raw.ygg_folder),
+        /** Someone's come home: Heimdall's horn, softened. */
+        HOME(R.raw.ygg_home),
+        /** Someone's gone out: a short, low note on the war horn. */
+        AWAY(R.raw.ygg_away),
+    }
 
     private var pool: SoundPool? = null
     private val ids = HashMap<Sound, Int>()
@@ -21,7 +27,7 @@ object Carved {
     private fun ready(ctx: Context): SoundPool {
         pool?.let { return it }
         val p = SoundPool.Builder()
-            .setMaxStreams(2)
+            .setMaxStreams(3)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)

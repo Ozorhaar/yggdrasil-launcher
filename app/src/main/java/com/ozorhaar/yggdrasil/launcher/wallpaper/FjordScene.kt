@@ -34,6 +34,8 @@ import kotlin.random.Random
  */
 const val DEMO_SECONDS = 80f
 const val DEMO_PREF = "fjord_demo_start"
+/** The launcher writes the time someone came home here: the hall's windows flare for a while. */
+const val FLARE_PREF = "fjord_flare_at"
 
 /** The longhouse's shelf on the right-hand hill, in the mountain art's coordinates. */
 private const val SHELF_Y = 68
@@ -124,6 +126,9 @@ class FjordScene(ctx: Context) {
         val away: Boolean get() = !hearth
     }
     var house: House? = null
+
+    /** When someone last came home (the windows flare for 20 s after). */
+    var flareAt = 0L
 
     /** Set to start the ~80 s demo that runs through a day and every kind of weather. 0 = off. */
     var demoStart = 0L
@@ -469,10 +474,10 @@ class FjordScene(ctx: Context) {
         val smoke = house?.hearth == true
         frameMs = when {
             animating || sailing -> 66L
-            smoke || rowing || house?.leak == true || house?.fire == true || house?.forge == true -> 125L
+            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || house?.leak == true || house?.fire == true || house?.forge == true -> 125L
             else -> 60_000L
         }
-        animating = animating || smoke || sailing || rowing || house?.leak == true || house?.fire == true || house?.forge == true
+        animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || house?.leak == true || house?.fire == true || house?.forge == true
         house = realHouse
     }
 
@@ -518,13 +523,16 @@ class FjordScene(ctx: Context) {
 
         val glow = 0.35f + 0.65f * dark
         val mid = (l + r) / 2
-        // windows either side of the door, lit while the house lights are on
-        if (h?.lightsOn == true) {
+        // windows either side of the door, lit while the house lights are on; a homecoming makes them flare
+        val since = System.currentTimeMillis() - flareAt
+        val flare = if (since in 0..20_000) (1f - since / 20_000f) * (0.6f + 0.4f * sin(t * 0.01f)) else 0f
+        if (h?.lightsOn == true || flare > 0f) {
             val warm = 0xFFF0C070.toInt()
             val wy = base - 21 * s
+            val gr = 22 * s * (1 + 1.6f * flare)
             for (wx in listOf(l + 34 * s, l + 82 * s, mid - 46 * s, mid + 46 * s, r - 82 * s, r - 34 * s)) {
-                paint.shader = RadialGradient(wx, wy, 22 * s, intArrayOf(argb(0.6f * glow, warm), 0), null, Shader.TileMode.CLAMP)
-                c.drawCircle(wx, wy, 22 * s, paint); paint.shader = null
+                paint.shader = RadialGradient(wx, wy, gr, intArrayOf(argb((0.6f * glow + 0.4f * flare).coerceAtMost(1f), warm), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(wx, wy, gr, paint); paint.shader = null
                 paint.color = argb(0.95f * glow, warm)
                 c.drawRect(wx - 5 * s, wy - 6 * s, wx + 5 * s, wy + 6 * s, paint)
             }

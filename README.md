@@ -27,3 +27,9 @@ Every push to `main` builds a new signed APK and release. Newer APKs install str
 
 GitHub Actions builds with Gradle 8.11 / AGP 8.7 / Kotlin 2.1 / Compose. The release signing key is held in
 the repository secrets `YGG_KEYSTORE_B64` and `YGG_KEYSTORE_PASSWORD`.
+
+## Sounds
+
+The launcher's carved sounds are cut from the Yggdrasil phone sound set, itself mixed from CC0
+Freesound recordings: "Battle_horn_1.wav" by kirmm (homecoming horn) and "Deep Horn" by Vendarro
+(the war-horn notes), among others.

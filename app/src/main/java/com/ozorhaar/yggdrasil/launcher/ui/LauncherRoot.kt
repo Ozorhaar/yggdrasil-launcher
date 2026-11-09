@@ -188,6 +188,7 @@ fun LauncherRoot() {
     val gates = rememberGates()
     val heimdall = rememberHeimdall()
     var heimdallOpen by remember { mutableStateOf(false) }
+    var hornCallOpen by remember { mutableStateOf(false) }
     var hornRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
     var steadingOpen by remember { mutableStateOf(false) }
     var sagaOpen by remember { mutableStateOf(false) }
@@ -603,6 +604,12 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
+                        // hold Hafnir's mark: a horn call through the house
+                        if (homeLinkReady && hafnirGemRect.inflate(12f).contains(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            hornCallOpen = true
+                            return@detectTapGestures
+                        }
                         // hold a door's mark: look through its camera first
                         if (homeLinkReady && sideDoorRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -788,6 +795,7 @@ fun LauncherRoot() {
         }
         peekGate?.let { g -> CameraPeek(g, gates) { peekGate = null } }
         if (heimdallOpen) HeimdallSheet(heimdall) { heimdallOpen = false }
+        if (hornCallOpen) HornCallSheet { hornCallOpen = false }
         if (steadingOpen) SteadingSheet(
             gates.steading, gates.watching(), gates.parcelAt(),
             onLook = { peekGate = it }, onClose = { steadingOpen = false },
@@ -1306,6 +1314,7 @@ private fun AppDrawer(
     onSettings: () -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
+    val ctx0 = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val shown = remember(apps, query) {
         if (query.isBlank()) apps else apps.filter { it.label.looselyHas(query) }
@@ -1362,14 +1371,51 @@ private fun AppDrawer(
             RuneButton("Close") { keyboard?.hide(); onClose() }
         }
         // always reachable, even when the home screen has no empty space to hold
+        val drawerPrefs = remember { ctx0.getSharedPreferences("ygg_drawer", android.content.Context.MODE_PRIVATE) }
+        var halls by remember { mutableStateOf(drawerPrefs.getBoolean("halls", true)) }
         Row(Modifier.padding(start = 16.dp, top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             RuneButton("Widgets") { keyboard?.hide(); onWidgets() }
             RuneButton("Settings") { keyboard?.hide(); onSettings() }
+            RuneButton(if (halls) "A–Z" else "Halls") {
+                halls = !halls; drawerPrefs.edit().putBoolean("halls", halls).apply()
+            }
         }
         val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
         val scrubbing = query.isBlank()
+        val byHall = remember(shown, halls, scrubbing) { if (halls && scrubbing) Hall.gather(shown) else null }
+        // where each hall's heading sits in the grid, for the hall strip
+        val hallIndex = remember(byHall) {
+            var i = 0
+            byHall?.map { (h, a) -> (h to i).also { i += 1 + a.size } }.orEmpty()
+        }
+        val hallScope = rememberCoroutineScope()
         Box(Modifier.fillMaxSize()) {
-            LazyVerticalGrid(
+            if (byHall != null) LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                state = gridState,
+                modifier = Modifier.fillMaxSize().nestedScroll(pullToClose).padding(start = 8.dp, end = 40.dp),
+            ) {
+                byHall.forEach { (hall, list) ->
+                    item(key = "hall:" + hall.name, span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                        Row(Modifier.padding(start = 8.dp, top = 14.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Text(hall.rune, color = Ygg.GoldHi, fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            RuneText(hall.title, 18.sp, Ygg.GoldHi)
+                            Spacer(Modifier.width(10.dp))
+                            Box(Modifier.weight(1f).height(1.dp).background(Dusk.gold.copy(alpha = 0.4f)))
+                        }
+                    }
+                    items(list, key = { it.key }) { app ->
+                        Box(Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            AppTile(
+                                app, icons, badges[app.packageName] ?: 0, runic, 54.dp * ICON_SCALE,
+                                onClick = { keyboard?.hide(); onLaunch(app) },
+                                onLongClick = { onLong(app) },
+                            )
+                        }
+                    }
+                }
+            } else LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 state = gridState,
                 modifier = Modifier.fillMaxSize().nestedScroll(pullToClose)
@@ -1385,8 +1431,22 @@ private fun AppDrawer(
                     }
                 }
             }
-            // the rune scrubber down the right edge (hidden while searching)
-            if (scrubbing) RuneScrubber(shown, gridState, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp, top = 4.dp, bottom = 8.dp))
+            // the rune scrubber down the right edge (hidden while searching); in halls, a strip of the halls' runes
+            if (byHall != null) Column(
+                Modifier.align(Alignment.CenterEnd).padding(end = 6.dp)
+                    .background(Ygg.Night.copy(alpha = 0.6f), CutCornerShape(8.dp))
+                    .border(1.dp, Dusk.gold.copy(alpha = 0.5f), CutCornerShape(8.dp))
+                    .padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                hallIndex.forEach { (hall, at) ->
+                    androidx.compose.material3.Text(
+                        hall.rune, color = Ygg.GoldHi, fontSize = 20.sp,
+                        modifier = Modifier.clickable { hallScope.launch { gridState.animateScrollToItem(at) } }
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                    )
+                }
+            } else if (scrubbing) RuneScrubber(shown, gridState, Modifier.align(Alignment.CenterEnd).padding(end = 6.dp, top = 4.dp, bottom = 8.dp))
         }
     }
 }

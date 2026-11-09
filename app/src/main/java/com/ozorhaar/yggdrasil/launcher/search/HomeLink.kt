@@ -238,6 +238,33 @@ class HomeLink(context: Context) {
         return url + path
     }
 
+    /** Whether each of the household is home, and when that last changed (epoch ms). Blocking. */
+    fun household(): Map<String, Pair<Boolean, Long>> {
+        val inHome = stateOf("zone.home")?.optJSONObject("attributes")?.optJSONArray("persons")
+            ?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() } ?: emptySet()
+        val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+        return HEARTH_KEEPERS.associateWith { id ->
+            val o = stateOf(id)
+            val home = id in inHome || o?.optString("state") == "home"
+            val at = o?.optString("last_changed")?.take(19)?.let { runCatching { iso.parse(it)?.time }.getOrNull() } ?: 0L
+            home to at
+        }
+    }
+
+    /** The satellites that can sound a horn call: (entity, name). */
+    val satellites = listOf(
+        "assist_satellite.living_room_satone_assist_satellite" to "SatOne",
+        "assist_satellite.satellite1_db104c_assist_satellite" to "SatTwo",
+    )
+
+    /** A horn call: Jarvis announces [message] on the given satellites. Blocking. */
+    fun announce(entities: List<String>, message: String) {
+        require(entities.isNotEmpty() && entities.all { e -> satellites.any { it.first == e } })
+        require(message.isNotBlank() && message.length <= 400)
+        val body = JSONObject().put("entity_id", JSONArray(entities)).put("message", message.trim())
+        request(url, token(), "POST", "/api/services/assist_satellite/announce", body.toString())
+    }
+
     private var parcelIds: Map<Lookout, List<String>> = emptyMap()
     private var parcelIdsAt = 0L
 

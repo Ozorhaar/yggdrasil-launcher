@@ -54,6 +54,9 @@ class GateStates {
     /** Doors where Frigate sees someone right now (the raven on the roof). */
     val seen = mutableStateMapOf<Lookout, Boolean>()
 
+    /** Who of the household is home (person entity -> home), for the homecoming horn. */
+    val household = mutableStateMapOf<String, Boolean>()
+
     /** The smoker, the printer and the leak sensors (null until first read). */
     var steading by androidx.compose.runtime.mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.Steading?>(null)
 
@@ -91,6 +94,7 @@ private fun Context.readGates(into: GateStates) {
     Gate.entries.forEach { g -> runCatching { link.gateState(g) }.getOrNull()?.let { into.put(g, it) } }
     runCatching { link.parcels() }.getOrNull()?.let { got -> Lookout.entries.forEach { into.parcel[it] = it in got } }
     runCatching { link.steading() }.getOrNull()?.let { into.steading = it }
+    runCatching { link.household() }.getOrNull()?.let { homecoming(it, into) }
     into.readAt = System.currentTimeMillis()
 }
 
@@ -98,6 +102,31 @@ private fun Context.readWatchers(into: GateStates) {
     val link = ygg.homeLink
     if (!link.configured) return
     Lookout.entries.forEach { l -> runCatching { link.seen(l) }.getOrNull()?.let { into.seen[l] = it } }
+}
+
+/**
+ * The homecoming horn: when someone of the household comes home (within the last 15 minutes),
+ * Heimdall's horn sounds softly and the hall's windows flare on the wallpaper; a low short note
+ * when someone goes out. Remembered between runs, so each change is heralded once.
+ */
+private fun Context.homecoming(now: Map<String, Pair<Boolean, Long>>, into: GateStates) {
+    val p = getSharedPreferences("ygg_household", Context.MODE_PRIVATE)
+    var arrived = false; var left = false
+    val ed = p.edit()
+    now.forEach { (id, v) ->
+        val (home, at) = v
+        val was = if (p.contains(id)) p.getBoolean(id, home) else null
+        if (was != null && was != home && System.currentTimeMillis() - at < 15 * 60_000L) {
+            if (home) arrived = true else left = true
+        }
+        ed.putBoolean(id, home)
+        into.household[id] = home
+    }
+    ed.apply()
+    if (arrived) {
+        Carved.play(this, Carved.Sound.HOME)
+        getSharedPreferences("weather", Context.MODE_PRIVATE).edit().putLong(com.ozorhaar.yggdrasil.launcher.wallpaper.FLARE_PREF, System.currentTimeMillis()).apply()
+    } else if (left) Carved.play(this, Carved.Sound.AWAY)
 }
 
 /**
