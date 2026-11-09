@@ -142,7 +142,7 @@ fun Modifier.runeBorder(
                 val hr = glyphH * 1.1f
                 drawCircle(
                     androidx.compose.ui.graphics.Brush.radialGradient(
-                        listOf(Ygg.Frost.copy(alpha = 0.55f * halo), Ygg.Frost.copy(alpha = 0.18f * halo), Color.Transparent),
+                        listOf(Ygg.Frost.copy(alpha = (0.69f * halo).coerceAtMost(1f)), Ygg.Frost.copy(alpha = 0.225f * halo), Color.Transparent),
                         center = Offset.Zero, radius = hr,
                     ),
                     radius = hr, center = Offset.Zero,
