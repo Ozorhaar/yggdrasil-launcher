@@ -16,6 +16,7 @@ object SteadingConfig {
         LONGSHIP("longship", "Longship leaves when no one's home"),
         OARS("oars", "Oars row while sending power to the grid"),
         SAIL("sail", "Sail glows with the solar panels"),
+        WIND("wind", "Sail fills with the wind"),
         HEARTH("hearth", "Hearth smoke while someone's home"),
         FIRE("fire", "Surtur's fire while the smoker's lit"),
         FORGE("forge", "Forge sparks while printing"),

@@ -47,6 +47,8 @@ private const val HALL_L = 1118f
 private const val HALL_R = 1402f
 /** The hull's waterline in the longship bitmap: everything below it is the art's old reflection. */
 private const val SHIP_WL = 386
+/** The sail's mesh for the wind. */
+private const val SAIL_COLS = 10; private const val SAIL_ROWS = 8
 /** The sail on the longship bitmap (its own pixels). */
 private const val SAIL_L = 448; private const val SAIL_T = 40; private const val SAIL_R = 766; private const val SAIL_B = 284
 /** Solar output (W) at which the sail burns brightest. */
@@ -170,9 +172,11 @@ class FjordScene(ctx: Context) {
     init {
         val art = decode(ctx, R.drawable.fjord_ship)
         sail = sailMask(art)
-        ship = Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL)
-        shipRefl = mirrorShip(ship)
-        if (ship !== art) art.recycle()
+        val hull = Bitmap.createBitmap(art, 0, 0, art.width, SHIP_WL)
+        shipRefl = mirrorShip(hull)
+        // the cloth is lifted out of the ship and drawn on its own, so the wind can shape it
+        ship = cutSail(hull, sail)
+        if (hull !== art) art.recycle()
     }
     private val ray: Bitmap = auroraRay()
     private val treeLazy = lazy { worldTree() }
@@ -530,6 +534,15 @@ class FjordScene(ctx: Context) {
             paint.colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setScale(sl, sl, sl, 1f) })
             rect.set(shipL, shipT, shipR, wl)
             c.drawBitmap(ship, null, rect, paint)
+            // the sail, filled by the real wind: slack in a calm, bellied out in a breeze, straining
+            // and shuddering in a gale
+            val windNow = if (cfg(Touch.WIND)) wx?.windMph ?: 0f else 6f
+            val gustNow = if (cfg(Touch.WIND)) wx?.gustMph ?: 0f else 0f
+            val fillTarget = ((windNow - 3f) / 22f).coerceIn(0f, 1f)
+            sailFill += (fillTarget - sailFill) * min(1f, dt / 3f)
+            val gale = ((maxOf(gustNow, windNow * 1.3f) - 28f) / 20f).coerceIn(0f, 1f)
+            sailMesh(sailRect, sailFill, gale, t)
+            sail?.let { c.drawBitmapMesh(it, SAIL_COLS, SAIL_ROWS, meshV, 0, meshC, 0, paint) }
             paint.colorFilter = null; paint.alpha = 255
             if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
             if (feast) dressShip(c, shipL, shipT, s, t, fade)
@@ -540,7 +553,7 @@ class FjordScene(ctx: Context) {
                 paint.colorFilter = PorterDuffColorFilter(0xFFECD08F.toInt(), PorterDuff.Mode.SRC_IN)
                 paint.blendMode = BlendMode.PLUS
                 paint.alpha = (150 * sun * fade).toInt()
-                c.drawBitmap(sm, null, sailRect, paint)
+                c.drawBitmapMesh(sm, SAIL_COLS, SAIL_ROWS, meshV, 0, null, 0, paint)
                 paint.blendMode = null; paint.colorFilter = null; paint.alpha = 255
             }
             c.restore()
@@ -896,6 +909,54 @@ class FjordScene(ctx: Context) {
             }
         }
         paint.strokeCap = Paint.Cap.BUTT
+    }
+
+    private var sailFill = 0.3f
+    private val meshV = FloatArray((SAIL_COLS + 1) * (SAIL_ROWS + 1) * 2)
+    private val meshC = IntArray((SAIL_COLS + 1) * (SAIL_ROWS + 1))
+
+    /**
+     * The sail's shape for this frame, as a mesh over [r] (the yard along the top stays put).
+     * [fill] 0 hangs slack and wrinkled, 1 bellies out (fatter mid-height, the foot curving down,
+     * the edges in shadow); [gale] adds a fast shudder along the free edge.
+     */
+    private fun sailMesh(r: RectF, fill: Float, gale: Float, t: Float) {
+        val w = r.width(); val h = r.height()
+        val slack = 1f - fill
+        var n = 0
+        for (j in 0..SAIL_ROWS) {
+            val v = j / SAIL_ROWS.toFloat()
+            for (i in 0..SAIL_COLS) {
+                val u = i / SAIL_COLS.toFloat()
+                val arc = sin(PI.toFloat() * u)
+                var dx = (u - 0.5f) * w * 0.10f * fill * sin(PI.toFloat() * v)
+                var dy = h * (0.07f * fill * v * v + 0.03f * slack * v) * arc
+                dx += w * 0.008f * slack * v * sin(v * 9f + u * 2f + t * 0.0015f)
+                dx += w * (0.004f + 0.014f * gale) * fill * v * u * sin(t * (0.012f + 0.02f * gale) - u * 7f + v * 3f)
+                if (gale > 0f) dy += h * 0.01f * gale * v * sin(t * 0.03f + u * 11f)
+                meshV[n * 2] = r.left + u * w + dx
+                meshV[n * 2 + 1] = r.top + v * h + dy
+                val edge = abs(u - 0.5f) * 2f
+                val lum = (1f - 0.28f * fill * edge * edge + 0.06f * fill * (1f - edge) - 0.05f * slack * v)
+                val g = (255 * lum.coerceIn(0f, 1f)).toInt()
+                meshC[n] = (0xFF shl 24) or (g shl 16) or (g shl 8) or g
+                n++
+            }
+        }
+    }
+
+    /** The ship with the sail's cloth taken out (it's drawn on its own, shaped by the wind). */
+    private fun cutSail(src: Bitmap, cloth: Bitmap?): Bitmap {
+        if (cloth == null) return src
+        val b = runCatching { src.copy(Bitmap.Config.ARGB_8888, true) }.getOrNull() ?: return src
+        val w = SAIL_R - SAIL_L; val h = SAIL_B - SAIL_T
+        val px = IntArray(w * h); val m = IntArray(w * h)
+        b.getPixels(px, 0, w, SAIL_L, SAIL_T, w, h)
+        cloth.getPixels(m, 0, w, 0, 0, w, h)
+        for (i in px.indices) if ((m[i] ushr 24) != 0) px[i] = 0
+        b.setPixels(px, 0, w, SAIL_L, SAIL_T, w, h)
+        src.recycle()
+        return b
     }
 
     /** The hull and sail mirrored at the waterline, fading with depth and broken by a gentle ripple. */

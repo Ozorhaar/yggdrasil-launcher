@@ -28,6 +28,9 @@ object Weather {
         val sunrise: Long,   // epoch ms, today
         val sunset: Long,
         val fetchedAt: Long,
+        /** Wind at 10 m and its gusts, mph (0 in readings from before the launcher fetched wind). */
+        val windMph: Float = 0f,
+        val gustMph: Float = 0f,
     ) {
         val sky: Sky
             get() = when (code) {
@@ -86,9 +89,9 @@ object Weather {
         val (lat, lon) = place(ctx)
         val url = URL(
             "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-                "&current=temperature_2m,weather_code,is_day" +
+                "&current=temperature_2m,weather_code,is_day,wind_speed_10m,wind_gusts_10m" +
                 "&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset" +
-                "&temperature_unit=fahrenheit&timezone=auto&forecast_days=1&timeformat=unixtime"
+                "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=1&timeformat=unixtime"
         )
         val conn = url.openConnection() as HttpURLConnection
         conn.connectTimeout = 8000
@@ -106,6 +109,8 @@ object Weather {
             .put("day", cur.getInt("is_day") == 1)
             .put("rise", daily.getJSONArray("sunrise").getLong(0) * 1000)
             .put("set", daily.getJSONArray("sunset").getLong(0) * 1000)
+            .put("wind", cur.optDouble("wind_speed_10m", 0.0))
+            .put("gust", cur.optDouble("wind_gusts_10m", 0.0))
             .put("at", System.currentTimeMillis())
         prefs(ctx).edit().putString("now", out.toString()).apply()
         return parse(out)
@@ -180,5 +185,6 @@ object Weather {
     private fun parse(o: JSONObject) = Now(
         tempF = o.getInt("t"), highF = o.getInt("hi"), lowF = o.getInt("lo"), code = o.getInt("code"),
         isDay = o.getBoolean("day"), sunrise = o.getLong("rise"), sunset = o.getLong("set"), fetchedAt = o.getLong("at"),
+        windMph = o.optDouble("wind", 0.0).toFloat(), gustMph = o.optDouble("gust", 0.0).toFloat(),
     )
 }
