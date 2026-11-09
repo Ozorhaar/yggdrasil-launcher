@@ -961,7 +961,7 @@ private fun Dock(
             layout.dock.forEachIndexed { i, key ->
                 val loc = Loc.Dock(i)
                 Box(Modifier.size(64.dp).dropCell(drag, loc), contentAlignment = Alignment.Center) {
-                    SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp * ICON_SCALE, false)
+                    SlotContent(loc, key, layout, byKey, icons, badges, drag, 52.dp, false)
                 }
             }
         }
@@ -1740,7 +1740,7 @@ fun RuneButton(text: String, onClick: () -> Unit) {
 }
 
 
-/** Icons a fifth smaller than the launcher's original size, everywhere. */
+/** Icons a fifth smaller than the launcher's original size (all but the dock's). */
 private const val ICON_SCALE = 0.8f
 
 /** Opens the Home Assistant companion app (full or minimal build). */
