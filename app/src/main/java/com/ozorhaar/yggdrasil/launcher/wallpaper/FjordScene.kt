@@ -65,6 +65,20 @@ class FjordScene(ctx: Context) {
             return Triple(l + 40 * s + (r - l - 80 * s) * 0.18f, ridge, s)
         }
 
+        /**
+         * The whole steading as one tap target: from the lantern post to the screen's edge, from a
+         * little sky above the ridge down to the hall's foot. Must match drawSteading.
+         */
+        fun steadingArea(w: Int, h: Int, xOffset: Float): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val landX = ox - 1440 * s * 0.02f + par
+            val base = oy + 1327 * s + 68 * s + 0.5f * s
+            val l = landX + HALL_L * 1.04f * s
+            return android.graphics.RectF(l - 44 * s, base - 100 * s - 35 * s, w.toFloat(), base + 3 * s)
+        }
+
         /** The ground just right of the longhouse's door, where a delivered chest sits. Must match drawSteading. */
         fun doorStep(w: Int, h: Int, xOffset: Float): Triple<Float, Float, Float> {
             val s = max(w / 1440f, h / 3120f)

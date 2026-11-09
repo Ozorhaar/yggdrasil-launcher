@@ -76,14 +76,10 @@ fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit)
         }
     }
 
-    LaunchedEffect(perched, size) {
-        onPerch(
-            if (perched && size.width > 0) {
-                val (px, py, s) = FjordScene.ridgePerch(size.width, size.height, wallX())
-                val l = 64 * s
-                Rect(px - 0.75f * l, py - 0.95f * l, px + 0.8f * l, py + 0.15f * l).inflate(24f)
-            } else null
-        )
+    // the whole longhouse is the raven's tap target while it's here (not just the bird)
+    val here = present && !leaving
+    LaunchedEffect(here, size) {
+        onPerch(if (here && size.width > 0) steadingRect(size, wallX()) else null)
     }
 
     Canvas(Modifier.fillMaxSize().onSizeChanged { size = it }) {
@@ -110,6 +106,9 @@ fun RavenWatch(watching: Lookout?, wallX: () -> Float, onPerch: (Rect?) -> Unit)
         flyingRaven(pos.x, pos.y - 0.32f * l, l, beat)
     }
 }
+
+private fun steadingRect(size: IntSize, wallX: Float): Rect =
+    FjordScene.steadingArea(size.width, size.height, wallX).let { Rect(it.left, it.top, it.right, it.bottom) }
 
 private fun bezier(a: Offset, b: Offset, c: Offset, t: Float): Offset {
     val m = 1 - t
@@ -200,10 +199,7 @@ fun ChestAtDoor(look: Lookout?, wallX: () -> Float, onPlaced: (Rect?) -> Unit) {
     val shown by androidx.compose.animation.core.animateFloatAsState(if (look != null) 1f else 0f, tween(700), label = "chest")
     LaunchedEffect(look != null, size) {
         onPlaced(
-            if (look != null && size.width > 0) {
-                val (x, y, s) = FjordScene.doorStep(size.width, size.height, wallX())
-                Rect(x - 4 * s, y - 30 * s, x + 46 * s, y + 4 * s).inflate(28f)
-            } else null
+            if (look != null && size.width > 0) steadingRect(size, wallX()) else null
         )
     }
     Canvas(Modifier.fillMaxSize().onSizeChanged { size = it }) {
