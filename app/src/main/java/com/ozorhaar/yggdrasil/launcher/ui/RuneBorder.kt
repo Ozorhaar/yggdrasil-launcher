@@ -123,19 +123,31 @@ fun Modifier.runeBorder(
         // leave the foot of the band clear for the horn
         if (hornColor != null && kotlin.math.abs(angle - 180f) < 1f && kotlin.math.abs(pos.x - size.width / 2) < glyphH * 2.2f) continue
         // with the battery gauge: lit up to the level, dim beyond; a frost light runs while charging
-        var c = color.copy(alpha = 0.8f); var dot = color.copy(alpha = 0.7f); var st = stroke
+        var c = color.copy(alpha = 0.8f); var dot = color.copy(alpha = 0.7f); var st = stroke; var halo = 0f
         if (g != null) {
             val x = (pos.x - mid) / span
             if (x <= g.level) {
                 val base = if (g.level < 0.2f && !g.charging) Ygg.Ember else Ygg.GoldHi
                 val run = if (g.charging) (1f - kotlin.math.abs(x - g.sweep * g.level) / 0.07f).coerceIn(0f, 1f) else 0f
                 c = androidx.compose.ui.graphics.lerp(base, Ygg.Frost, run)
+                halo = run
                 dot = c; st = litStroke
             } else {
                 c = color.copy(alpha = 0.3f); dot = color.copy(alpha = 0.25f)
             }
         }
         translate(pos.x, pos.y) {
+            // while charging, the running frost light carries a soft halo
+            if (halo > 0.02f) {
+                val hr = glyphH * 1.1f
+                drawCircle(
+                    androidx.compose.ui.graphics.Brush.radialGradient(
+                        listOf(Ygg.Frost.copy(alpha = 0.55f * halo), Ygg.Frost.copy(alpha = 0.18f * halo), Color.Transparent),
+                        center = Offset.Zero, radius = hr,
+                    ),
+                    radius = hr, center = Offset.Zero,
+                )
+            }
             rotate(angle, pivot = Offset.Zero) {
                 if (i % 6 == 5) {
                     // word break: two carved dots
