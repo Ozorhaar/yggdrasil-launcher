@@ -334,11 +334,13 @@ class HomeLink(context: Context) {
         val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
         var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f; var use = -1f
         var leak = false; var fire = false; var forge = false
+        val darkLights = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.DARK_LIGHTS).toSet()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
             val id = o.optString("entity_id"); val st = o.optString("state")
             when {
-                id.startsWith("light.") && st == "on" -> lights = true
+                // indoor lights only: not the ones set aside in the steading settings, nor gadget LEDs
+                id.startsWith("light.") && st == "on" && id !in darkLights && !id.endsWith("_led") && !id.endsWith("_led_ring") -> lights = true
                 id == Gate.GARAGE.entityId -> garage = st == "open" || st == "opening"
                 id == Gate.SIDE_DOOR.entityId -> door = st == "unlocked" || st == "open"
                 id in HEARTH_KEEPERS && st == "home" -> hearth = true

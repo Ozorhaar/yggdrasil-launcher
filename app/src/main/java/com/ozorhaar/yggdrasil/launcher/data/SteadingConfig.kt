@@ -30,6 +30,9 @@ object SteadingConfig {
 
     enum class Entities(val key: String, val label: String, val default: String) {
         PEOPLE("people", "Household (person entities)", "person.ozorhaar, person.leah"),
+        DARK_LIGHTS("dark_lights", "Lights that don't light the hall's windows (outdoor, dusk-to-dawn, gadgets)",
+            "light.smart_curtain_lights, light.front_porch_bulb, light.back_patio, light.drivedoor_light, light.permanent_lights, " +
+                "light.smart_ice_maker, light.water_heater, light.yggdrasil_chamber_light"),
         LEAKS("leaks", "Leak sensors", "binary_sensor.bathroomsls_water_leak, binary_sensor.kitchenls_water_leak, binary_sensor.upstairstls_water_leak"),
         SOLAR("solar", "Solar power now (W)", "sensor.solar_power"),
         SOLAR_TODAY("solar_today", "Solar made today (kWh)", "sensor.solar_generation"),
