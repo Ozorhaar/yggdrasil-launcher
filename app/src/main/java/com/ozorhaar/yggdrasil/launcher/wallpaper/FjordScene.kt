@@ -40,8 +40,8 @@ const val FLARE_PREF = "fjord_flare_at"
 
 /** The longhouse's shelf on the right-hand hill, in the mountain art's coordinates. */
 private const val SHELF_Y = 68
-private const val SHELF_FROM = 1040
-private const val SHELF_FULL = 1112
+private const val SHELF_FROM = 1015
+private const val SHELF_FULL = 1084
 /** The longhouse's ends, in the art's coordinates. */
 private const val HALL_L = 1118f
 private const val HALL_R = 1402f
