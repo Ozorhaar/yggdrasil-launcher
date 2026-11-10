@@ -15,7 +15,8 @@ android {
         minSdk = 31
         targetSdk = 36
         versionCode = ciRun
-        versionName = "1.0.$ciRun"
+        // 2.0.0 is the living-scene release (CI run 87); later builds count up from it
+        versionName = "2.0.${(ciRun - 87).coerceAtLeast(0)}"
     }
 
     signingConfigs {

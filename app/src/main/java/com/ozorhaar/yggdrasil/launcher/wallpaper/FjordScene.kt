@@ -69,13 +69,43 @@ class FjordScene(ctx: Context) {
         com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(appCtx, t)
     // which living touches are on (read from the steading settings each frame)
     private var showHearth = true; private var showFire = true; private var showForge = true
-    private var showLeak = true; private var showYule = true
+    private var showLeak = true; private var showYule = true; private var showPlaces = true
+    private val props = Props()
     /** The name-day feast is on (1 January, or a preview). */
     private var feast = false
 
     companion object {
         /** Whether the longship is in its bay (not sailed out of the fjord); the scene writes it each frame. */
         @Volatile var shipHome = true
+
+        /**
+         * The scene's places, each opening a folder: its anchor in the mountain art's coordinates
+         * (where the prop stands) and its tap box around the anchor. The World Tree stands in the sky,
+         * so its box is in the screen's own art coordinates.
+         */
+        enum class Place(val ax: Float, val ay: Float, val box: FloatArray, val sky: Boolean = false) {
+            NETWORK(0f, 0f, floatArrayOf(40f, 1000f, 330f, 1330f), sky = true),
+            PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
+            FINANCE(150f, 1630f, floatArrayOf(-74f, -96f, 76f, 8f)),
+            VIDEO(78f, 1934f, floatArrayOf(-36f, -62f, 58f, 8f)),
+            WORK(1225f, 1622f, floatArrayOf(-100f, -96f, 98f, 18f)),
+            FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
+            SHOP(1210f, 2075f, floatArrayOf(-124f, -156f, 126f, 14f)),
+        }
+
+        /** A place's tap box in screen pixels. Must match drawPlaces. */
+        fun placeRect(w: Int, h: Int, xOffset: Float, pl: Place): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val landX = ox - 1440 * s * 0.02f + par
+            val b = pl.box
+            return if (pl.sky) android.graphics.RectF(ox + b[0] * s, oy + b[1] * s, ox + b[2] * s, oy + b[3] * s)
+            else {
+                val x = landX + pl.ax * 1.04f * s; val y = oy + pl.ay * s
+                android.graphics.RectF(x + b[0] * s, y + b[1] * s, x + b[2] * s, y + b[3] * s)
+            }
+        }
 
         /** The longship's parts that answer a tap: Freki at the stern, Geri at the bow, and the hull. */
         enum class ShipPart { FREKI, GERI, HULL }
@@ -95,6 +125,20 @@ class FjordScene(ctx: Context) {
                 r(228f, 314f, 932f, 378f).contains(x, y) -> ShipPart.HULL
                 else -> null
             }
+        }
+
+        /** A part of the longship as a box in screen pixels (for marking it). */
+        fun shipPartRect(w: Int, h: Int, xOffset: Float, part: ShipPart): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val shipL = ox - 1440 * s * 0.02f + par; val shipT = oy + SHIP_TOP * s
+            val b = when (part) {
+                ShipPart.FREKI -> floatArrayOf(58f, 92f, 216f, 234f)
+                ShipPart.GERI -> floatArrayOf(944f, 92f, 1094f, 234f)
+                ShipPart.HULL -> floatArrayOf(228f, 314f, 932f, 378f)
+            }
+            return android.graphics.RectF(shipL + b[0] * 1.04f * s, shipT + b[1] * s, shipL + b[2] * 1.04f * s, shipT + b[3] * s)
         }
 
         /** The sail (and a little room for the wind's belly) as a tap target. Must match the ship's drawing. */
@@ -320,7 +364,7 @@ class FjordScene(ctx: Context) {
         val p = skyAt(now)
         // the demo also shows the steading at its liveliest: hearth lit, sail full of sun by day
         val realHouse = house
-        showHearth = cfg(Touch.HEARTH); showFire = cfg(Touch.FIRE); showForge = cfg(Touch.FORGE)
+        showHearth = cfg(Touch.HEARTH); showFire = cfg(Touch.FIRE); showForge = cfg(Touch.FORGE); showPlaces = cfg(Touch.PLACES)
         showLeak = cfg(Touch.LEAK); showYule = cfg(Touch.YULE)
         // Jason's name-day: the hall keeps a feast all day, fireworks after midnight
         feast = Birthday.today(appCtx, realNow)
@@ -404,7 +448,9 @@ class FjordScene(ctx: Context) {
 
         // Yggdrasil itself: on clear nights the World Tree's bare crown rises behind the mountains,
         // a darker shape against the stars, its branches edged green and frost while the lights dance
-        val treeA = ((p.dark - 0.6f) / 0.4f).coerceIn(0f, 1f) * (1 - cloud * 2f).coerceIn(0f, 1f)
+        // (while the folders live in the scene it stands faintly at every hour: it opens Network)
+        val treeA = (((p.dark - 0.6f) / 0.4f).coerceIn(0f, 1f) * (1 - cloud * 2f).coerceIn(0f, 1f))
+            .let { if (showPlaces) max(it, 0.22f) else it }
         if (treeA > 0.03f && cfg(Touch.WORLD_TREE)) {
             val tb = tree
             val th = h * 0.5f; val tw = th * tb.width / tb.height
@@ -531,6 +577,8 @@ class FjordScene(ctx: Context) {
 
         // the steading on the right-hand hill: a longhouse that follows the house (see drawSteading)
         drawSteading(c, landX, landTop, s, light, p.dark, snowCover, t)
+        // the places where the folders live: runestone, cave, skald, smithy, cookfire, knarr
+        if (showPlaces) drawPlaces(c, landX, oy, s, light, p.dark, t)
 
         // longship, its reflection and the ripples. It sails out of the fjord when no one's home
         // and back in when someone is, and rows while the house sends power to the grid.
@@ -784,7 +832,7 @@ class FjordScene(ctx: Context) {
         }
 
         // the forge: while the printer works, a stone chimney near the hall's right end throws sparks
-        if (h?.forge == true && showForge) {
+        if (h?.forge == true && showForge && !showPlaces) {          // (with the places, the smithy's chimney sparks instead)
             val cx = r - 72 * s; val ctop = ridge + 6 * s
             paint.color = mix(0xFF2A2C30.toInt(), 0xFF6A6660.toInt(), light)
             c.drawRect(cx - 7 * s, ctop - 18 * s, cx + 7 * s, ctop + 14 * s, paint)
@@ -1145,6 +1193,27 @@ class FjordScene(ctx: Context) {
             b.setPixels(col, 0, 1, x, 0, 1, h)
         }
         return b
+    }
+
+    /** The places where the folders live, each standing on its spot in the mountain art (see [Place]). */
+    private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {
+        props.light = light; props.dark = dark; props.t = t
+        props.forge = house?.forge == true && showForge
+        for (pl in Place.entries) {
+            if (pl.sky) continue
+            c.save()
+            c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s); c.scale(s, s)
+            when (pl) {
+                Place.PERSONAL -> props.runestone(c)
+                Place.FINANCE -> props.cave(c)
+                Place.VIDEO -> props.skald(c)
+                Place.WORK -> props.smithy(c)
+                Place.FOOD -> props.cookfire(c)
+                Place.SHOP -> props.knarr(c)
+                Place.NETWORK -> Unit
+            }
+            c.restore()
+        }
     }
 
     private fun decode(ctx: Context, res: Int): Bitmap =

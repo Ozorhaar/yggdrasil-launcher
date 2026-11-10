@@ -469,6 +469,25 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** Takes these folders' tiles off the home grid and dock; the folders stay (the scene opens them). */
+    fun takeOffGrid(ids: Collection<String>) {
+        ids.forEach { id -> folders[id]?.let { replaceRef(it.ref, null) } }
+        save()
+    }
+
+    /** Removes a folder and its tile; its apps stay in the drawer. */
+    fun dropFolder(id: String) {
+        val f = folders.remove(id) ?: return
+        replaceRef(f.ref, null)
+        save()
+    }
+
+    /** Takes an app's icon off the home grid (it stays in the drawer). */
+    fun removeFromGrid(key: String) {
+        pages.forEach { p -> p.indices.forEach { if (p[it] == key) p[it] = null } }
+        save()
+    }
+
     /** A folder with fewer than two apps turns back into its last app (or nothing). */
     private fun dissolveIfSmall(f: Folder) {
         if (f.apps.size >= 2) return

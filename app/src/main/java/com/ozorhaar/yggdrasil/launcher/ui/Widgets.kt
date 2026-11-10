@@ -396,7 +396,7 @@ private fun Stepper(label: String, value: Int, onStep: (Int) -> Unit) {
 
 /** What a hold on empty home space offers. */
 @Composable
-fun HomeMenu(onWidgets: () -> Unit, onSettings: () -> Unit, onClose: () -> Unit) {
+fun HomeMenu(onWidgets: () -> Unit, onSettings: () -> Unit, onClose: () -> Unit, onPlaces: (() -> Unit)? = null) {
     Box(
         Modifier.fillMaxSize().background(Color(0x88000000))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
@@ -410,6 +410,7 @@ fun HomeMenu(onWidgets: () -> Unit, onSettings: () -> Unit, onClose: () -> Unit)
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             MenuChoice("Widgets", onWidgets)
+            if (onPlaces != null) MenuChoice("Places", onPlaces)
             MenuChoice("Settings", onSettings)
         }
     }

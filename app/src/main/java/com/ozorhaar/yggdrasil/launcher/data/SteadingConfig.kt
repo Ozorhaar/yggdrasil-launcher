@@ -16,6 +16,7 @@ object SteadingConfig {
         LONGSHIP("longship", "Longship leaves when no one's home"),
         OARS("oars", "Oars row while sending power to the grid"),
         SAIL("sail", "Sail glows with the solar panels"),
+        PLACES("places", "Folders live in the scene (tap the World Tree, runestone, cave, skald, smithy, cookfire, knarr)"),
         WIND("wind", "Sail fills with the wind"),
         HEARTH("hearth", "Hearth smoke while someone's home"),
         FIRE("fire", "Surtur's fire while the smoker's lit"),
@@ -38,11 +39,24 @@ object SteadingConfig {
         SOLAR("solar", "Solar power now (W)", "sensor.solar_power"),
         SOLAR_TODAY("solar_today", "Solar made today (kWh)", "sensor.solar_generation"),
         SOLAR_URL("solar_url", "Tapping the sail opens (a web page)", "https://solar.ozorhaar.com"),
+        F_NETWORK("place_network", "Folder the World Tree opens", "Network"),
+        F_PERSONAL("place_personal", "Folder the runestone opens", "Personal"),
+        F_FINANCE("place_finance", "Folder the dragon's cave opens", "Finance"),
+        F_VIDEO("place_video", "Folder the skald's fire opens", "Video"),
+        F_WORK("place_work", "Folder the smithy opens", "Work"),
+        F_FOOD("place_food", "Folder the cookfire opens", "Food"),
+        F_SHOP("place_shop", "Folder the knarr opens", "Shop"),
+        F_CAR("place_car", "Folder the longship's hull opens", "Car"),
+        F_SMART_HOME("place_smart_home", "Folder opened by holding the longhouse", "Smart Home"),
         HOUSE_USE("house_use", "House using now (W)", "sensor.sense_monitor_total_power"),
         SMOKER("smoker", "Smoker (climate)", "climate.surtur_climate"),
         PROBE("probe", "Smoker probe (climate)", "climate.back_patio_smoker_probe"),
         PRINTER("printer", "Printer status", "sensor.yggdrasil_print_status"),
     }
+
+    /** The folders that live in the scene (each one's name is set in its entry). */
+    val PLACE_FOLDERS = listOf(Entities.F_NETWORK, Entities.F_PERSONAL, Entities.F_FINANCE, Entities.F_VIDEO, Entities.F_WORK,
+        Entities.F_FOOD, Entities.F_SHOP, Entities.F_CAR, Entities.F_SMART_HOME)
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences("ygg_steading", Context.MODE_PRIVATE)

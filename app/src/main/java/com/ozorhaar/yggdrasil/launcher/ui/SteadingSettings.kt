@@ -35,7 +35,7 @@ import com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch
  * wallpaper reads the house every two).
  */
 @Composable
-internal fun SteadingSection() {
+internal fun SteadingSection(layout: com.ozorhaar.yggdrasil.launcher.data.LayoutStore) {
     val ctx = LocalContext.current
     Section("The steading")
     StatusLine("The living touches on the home screen and wallpaper.")
@@ -63,6 +63,28 @@ internal fun SteadingSection() {
         colors = SliderDefaults.colors(thumbColor = Ygg.Gold, activeTrackColor = Ygg.Gold),
     )
     Spacer(Modifier.height(10.dp))
+    StatusLine("The scene's places: the World Tree, the runestone, the dragon's cave, the skald's fire, the smithy, the cookfire and the knarr each open a folder (the longship's hull opens Car; hold the longhouse for Smart Home). Which folder each opens is set below.")
+    Spacer(Modifier.height(4.dp))
+    var askMove by remember { mutableStateOf(false) }
+    RuneButton("Move the folders into the scene") { askMove = true }
+    if (askMove) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { askMove = false },
+        title = { Text("Move the folders into the scene?") },
+        text = {
+            Text("Their tiles leave the home screen (" +
+                SteadingConfig.PLACE_FOLDERS.joinToString(", ") { SteadingConfig.text(ctx, it) } +
+                "); they open from the scene instead. The Google and Proton folders go (their apps stay in the app drawer), " +
+                "and so does the Visual Voicemail icon (it's on the rune band now).")
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton({
+                askMove = false
+                android.widget.Toast.makeText(ctx, moveIntoScene(ctx, layout), android.widget.Toast.LENGTH_LONG).show()
+            }) { Text("Move them") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton({ askMove = false }) { Text("Not now") } },
+    )
+    Spacer(Modifier.height(10.dp))
     StatusLine("The name-day feast comes by itself on 1 January.")
     Spacer(Modifier.height(4.dp))
     RuneButton("Preview the birthday") {
@@ -87,4 +109,20 @@ internal fun SteadingSection() {
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+
+/**
+ * Takes the scene's folders off the home grid (they open from the scene), drops the Google and
+ * Proton folders (their apps stay in the drawer) and the Visual Voicemail icon. Says what it did.
+ */
+internal fun moveIntoScene(ctx: android.content.Context, layout: com.ozorhaar.yggdrasil.launcher.data.LayoutStore): String {
+    val names = SteadingConfig.PLACE_FOLDERS.map { SteadingConfig.text(ctx, it).trim().lowercase() }.toSet()
+    val moved = layout.folders.values.filter { it.name.trim().lowercase() in names }.map { it.id }
+    layout.takeOffGrid(moved)
+    val dropped = layout.folders.values.filter { it.name.trim().lowercase() in setOf("google", "proton") && it.name.trim().lowercase() !in names }.map { it.id }
+    dropped.forEach { layout.dropFolder(it) }
+    val vvm = layout.pages.flatten().filterNotNull().filter { k -> listOf("com.tmobile.vvm.application", "com.samsung.vvm").any { k.contains(it) } }.distinct()
+    vvm.forEach { layout.removeFromGrid(it) }
+    return "Moved ${moved.size} folders into the scene; removed ${dropped.size} folders and ${vvm.size} icon" + (if (vvm.size == 1) "" else "s")
 }
