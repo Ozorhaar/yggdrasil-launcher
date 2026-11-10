@@ -77,6 +77,26 @@ class FjordScene(ctx: Context) {
         /** Whether the longship is in its bay (not sailed out of the fjord); the scene writes it each frame. */
         @Volatile var shipHome = true
 
+        /** The longship's parts that answer a tap: Freki at the stern, Geri at the bow, and the hull. */
+        enum class ShipPart { FREKI, GERI, HULL }
+
+        /** Which part of the longship (in its bay) is at screen point x, y, if any. Must match the ship's drawing. */
+        fun shipPart(w: Int, h: Int, xOffset: Float, x: Float, y: Float): ShipPart? {
+            if (!shipHome) return null
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val shipL = ox - 1440 * s * 0.02f + par; val shipT = oy + SHIP_TOP * s
+            fun r(l: Float, t: Float, rr: Float, b: Float) =
+                android.graphics.RectF(shipL + l * 1.04f * s, shipT + t * s, shipL + rr * 1.04f * s, shipT + b * s)
+            return when {
+                r(58f, 92f, 216f, 234f).contains(x, y) -> ShipPart.FREKI
+                r(944f, 92f, 1094f, 234f).contains(x, y) -> ShipPart.GERI
+                r(228f, 314f, 932f, 378f).contains(x, y) -> ShipPart.HULL
+                else -> null
+            }
+        }
+
         /** The sail (and a little room for the wind's belly) as a tap target. Must match the ship's drawing. */
         fun sailArea(w: Int, h: Int, xOffset: Float): android.graphics.RectF {
             val s = max(w / 1440f, h / 3120f)

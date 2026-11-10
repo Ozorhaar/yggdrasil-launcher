@@ -88,3 +88,66 @@ fun HeimdallGem(color: androidx.compose.ui.graphics.Color, modifier: Modifier = 
     drawLine(color, Offset(wd * 0.36f, h * 0.48f), Offset(wd * 0.42f, h * 0.85f), w * 0.7f, StrokeCap.Round)
     drawLine(color, Offset(wd * 0.62f, h * 0.45f), Offset(wd * 0.72f, h * 0.78f), w * 0.7f, StrokeCap.Round)
 }
+
+// ------------------------------------------------------------------ the marks at the foot of the band
+
+/** Under Huginn: voicemail, the old tape sign (two reels and the tape between); ember while a message waits. */
+@Composable
+fun VoicemailGem(waiting: Boolean, modifier: Modifier = Modifier) = DockGem(modifier) {
+    val c = if (waiting) Ygg.Ember else Ygg.Frost
+    val w = 1.8.dp.toPx()
+    val r = size.height * 0.27f
+    val cy = size.height * 0.46f
+    val lx = size.width * 0.5f - r * 1.75f; val rx = size.width * 0.5f + r * 1.75f
+    drawCircle(c, r, Offset(lx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    drawCircle(c, r, Offset(rx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    drawLine(c, Offset(lx, cy + r), Offset(rx, cy + r), w, StrokeCap.Round)
+}
+
+/** Under Mimir: the camera, as the eye Odin gave to Mimir's well. */
+@Composable
+fun EyeGem(modifier: Modifier = Modifier) = DockGem(modifier) {
+    val c = Ygg.Frost
+    val w = 1.7.dp.toPx()
+    val cx = size.width / 2; val cy = size.height / 2
+    val hw = size.width * 0.40f; val hh = size.height * 0.42f
+    val lid = androidx.compose.ui.graphics.Path().apply {
+        moveTo(cx - hw, cy)
+        quadraticTo(cx, cy - hh * 2, cx + hw, cy)
+        quadraticTo(cx, cy + hh * 2, cx - hw, cy)
+        close()
+    }
+    drawPath(lid, c, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = StrokeCap.Round))
+    drawCircle(c, hh * 0.55f, Offset(cx, cy))
+}
+
+/** Under Muninn (Memory): the gallery, a framed picture of peaks under the sun. */
+@Composable
+fun GalleryGem(modifier: Modifier = Modifier) = DockGem(modifier) {
+    val c = Ygg.Frost
+    val w = 1.6.dp.toPx()
+    val wd = size.width; val h = size.height
+    drawRect(c, Offset(wd * 0.2f, h * 0.06f), androidx.compose.ui.geometry.Size(wd * 0.6f, h * 0.88f), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    val peaks = androidx.compose.ui.graphics.Path().apply {
+        moveTo(wd * 0.24f, h * 0.84f); lineTo(wd * 0.42f, h * 0.42f); lineTo(wd * 0.54f, h * 0.66f)
+        lineTo(wd * 0.64f, h * 0.52f); lineTo(wd * 0.76f, h * 0.84f)
+    }
+    drawPath(peaks, c, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = StrokeCap.Round))
+    drawCircle(c, h * 0.09f, Offset(wd * 0.66f, h * 0.28f))
+}
+
+/** Under Brave's helm: a round shield, for Proton Pass (hold it for Proton Authenticator). */
+@Composable
+fun ShieldGem(modifier: Modifier = Modifier) = DockGem(modifier) {
+    val c = Ygg.Frost
+    val w = 1.6.dp.toPx()
+    val cx = size.width / 2; val cy = size.height / 2
+    val r = size.height * 0.48f
+    drawCircle(c, r, Offset(cx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
+    for (i in 0 until 4) {
+        val a = Math.toRadians(45.0 + i * 90.0)
+        val ux = kotlin.math.cos(a).toFloat(); val uy = kotlin.math.sin(a).toFloat()
+        drawLine(c, Offset(cx + ux * r * 0.32f, cy + uy * r * 0.32f), Offset(cx + ux * r * 0.92f, cy + uy * r * 0.92f), w * 0.8f, StrokeCap.Round)
+    }
+    drawCircle(c, r * 0.28f, Offset(cx, cy))
+}

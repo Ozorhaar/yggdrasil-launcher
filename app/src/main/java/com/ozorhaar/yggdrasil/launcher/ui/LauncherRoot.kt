@@ -195,6 +195,8 @@ fun LauncherRoot() {
         while (true) { value = com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.today(ctx); kotlinx.coroutines.delay(5_000L) }
     }
     var hornRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    /** The marks at the foot of the rune band, by the dock slot they sit under. */
+    val footRects = remember { androidx.compose.runtime.mutableStateMapOf<Int, androidx.compose.ui.geometry.Rect>() }
     var steadingOpen by remember { mutableStateOf(false) }
     var sagaOpen by remember { mutableStateOf(false) }
     // the morning saga: once a day, the first time the home screen shows between 5 and 11
@@ -483,6 +485,27 @@ fun LauncherRoot() {
         return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
     }
 
+    /** Where the wallpaper is across the pages (0 = first page, 1 = last), as the scene reads it. */
+    fun wallX(): Float {
+        val n = layout.pages.size
+        return if (n > 1) ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+    }
+
+    /** Which part of the longship is under a point (the wolf heads, the hull), if any. */
+    fun shipPartAt(p: Offset) =
+        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) null
+        else com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPart(rootSize[0], rootSize[1], wallX(), p.x, p.y)
+
+    /** A folder by its name (the scene's places open folders by name). */
+    fun folderNamed(name: String) = layout.folders.values.firstOrNull { it.name.trim().equals(name, ignoreCase = true) }
+
+    /** Opens an app by package (or, failing that, by its label); says so if it isn't installed. */
+    fun launchPackage(name: String, vararg pkgs: String, labels: List<String> = emptyList()) {
+        val all = byKeyNow.values.filter { !it.isShortcut }
+        val app = all.firstOrNull { it.packageName in pkgs } ?: all.firstOrNull { it.label.trim().lowercase() in labels }
+        if (app != null) launch(app) else Toast.makeText(ctx, "$name isn't installed", Toast.LENGTH_SHORT).show()
+    }
+
     /** Whether a point falls on the longship's sail, while the ship is in its bay. */
     fun sailHit(p: Offset): Boolean {
         if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return false
@@ -581,6 +604,30 @@ fun LauncherRoot() {
                                 ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.SOLAR_URL))
                             return@detectTapGestures
                         }
+                        // the longship's wolf heads and hull (icons over them keep their own taps)
+                        if (openFolder == null) shipPartAt(p)?.let { part ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            when (part) {
+                                com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.FREKI -> launchPackage("Life360", "com.life360.android.safetymapd", labels = listOf("life360"))
+                                com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.GERI -> launchPackage("My BMW", "de.bmw.connected.mobile20.na", "de.bmw.connected.mobile20.row",
+                                    labels = listOf("my bmw", "mybmw"))
+                                com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL -> folderNamed("Car")?.let { showFolder(it) }
+                                    ?: Toast.makeText(ctx, "No folder named Car", Toast.LENGTH_SHORT).show()
+                            }
+                            return@detectTapGestures
+                        }
+                        // the marks at the foot of the band, under the dock's apps
+                        footRects.entries.firstOrNull { it.value.inflate(10f).contains(p) }?.let { (i, _) ->
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            when (i) {
+                                0 -> launchPackage("Visual Voicemail", "com.tmobile.vvm.application", "com.samsung.vvm",
+                                    labels = listOf("visual voicemail", "voicemail"))
+                                1 -> launchPackage("Camera", "com.sec.android.app.camera", labels = listOf("camera"))
+                                3 -> launchPackage("Gallery", "com.sec.android.gallery3d", labels = listOf("gallery"))
+                                4 -> launchPackage("Proton Pass", "proton.android.pass", labels = listOf("proton pass"))
+                            }
+                            return@detectTapGestures
+                        }
                         // the marks on the band: settings (left), Hafnir (right)
                         if (hafnirGemRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -627,6 +674,22 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
+                        // hold the shield at the band's foot: Proton Authenticator
+                        if (footRects[4]?.inflate(10f)?.contains(p) == true) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            launchPackage("Proton Authenticator", "proton.android.authenticator", "me.proton.android.authenticator",
+                                labels = listOf("proton authenticator", "authenticator"))
+                            return@detectTapGestures
+                        }
+                        if (footRects.values.any { it.inflate(10f).contains(p) }) return@detectTapGestures
+                        // hold the longhouse: the Smart Home folder
+                        if (openFolder == null && steadingHit(p)) {
+                            folderNamed("Smart Home")?.let {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                showFolder(it)
+                                return@detectTapGestures
+                            }
+                        }
                         // hold Hafnir's mark: a horn call through the house
                         if (homeLinkReady && hafnirGemRect.inflate(12f).contains(p)) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -726,7 +789,9 @@ fun LauncherRoot() {
             if (layout.layoutMode == LayoutMode.GRID) PageMarks(layout.pages.size, pager.currentPage)
             Dock(layout, byKey, icons, badges, drag, onPlaced = { dockRect = it }, bridge = bridge, onBridgePlaced = { bridgeRect = it },
                 onHafnirPlaced = { hafnirGemRect = it }, onSettingsPlaced = { settingsGemRect = it },
-                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it }, heimdall = heimdall, onHornPlaced = { hornRect = it })
+                gates = gates, onSideDoorPlaced = { sideDoorRect = it }, onGaragePlaced = { garageRect = it }, heimdall = heimdall, onHornPlaced = { hornRect = it },
+                onFootPlaced = { i, r -> footRects[i] = r },
+                voicemailWaiting = listOf("com.tmobile.vvm.application", "com.samsung.vvm").sumOf { badges[it] ?: 0 } > 0)
         }
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
@@ -1003,6 +1068,8 @@ private fun Dock(
     onGaragePlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     heimdall: Heimdall.Report? = null,
     onHornPlaced: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    onFootPlaced: (Int, androidx.compose.ui.geometry.Rect) -> Unit = { _, _ -> },
+    voicemailWaiting: Boolean = false,
 ) {
     val homeLinked = LocalContext.current.ygg.homeLink.configured
     // the rune band doubles as the battery gauge; a light runs along it while charging
@@ -1058,6 +1125,26 @@ private fun Dock(
                                 gates.alert(com.ozorhaar.yggdrasil.launcher.search.HomeLink.Gate.GARAGE, gates.readAt.coerceAtLeast(System.currentTimeMillis())),
                                 Modifier.onGloballyPositioned { onGaragePlaced(it.boundsInRoot()) },
                             )
+                        }
+                    }
+                }
+            }
+        }
+        // the marks at the foot of the band, under the dock's apps (Heimdall's horn holds the middle):
+        // voicemail under the phone, the eye (camera) under Mimir, the gallery under Muninn, the shield under the helm
+        if (layout.dockRunes && layout.dock.size == 5) {
+            Row(
+                Modifier.fillMaxWidth().align(Alignment.BottomCenter).offset(y = 4.dp).padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                layout.dock.indices.forEach { i ->
+                    Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) {
+                        val m = Modifier.onGloballyPositioned { onFootPlaced(i, it.boundsInRoot()) }
+                        when (i) {
+                            0 -> VoicemailGem(voicemailWaiting, m)
+                            1 -> EyeGem(m)
+                            3 -> GalleryGem(m)
+                            4 -> ShieldGem(m)
                         }
                     }
                 }
@@ -1750,7 +1837,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nThe marks at the band's foot: voicemail, camera, gallery, Proton Pass (hold the shield: Proton Authenticator)\nTap a wolf head on the longship: Life360 (stern) or My BMW (bow); the hull: Car\nHold the longhouse: Smart Home\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
