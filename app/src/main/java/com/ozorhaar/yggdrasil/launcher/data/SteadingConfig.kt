@@ -37,6 +37,7 @@ object SteadingConfig {
         LEAKS("leaks", "Leak sensors", "binary_sensor.bathroomsls_water_leak, binary_sensor.kitchenls_water_leak, binary_sensor.upstairstls_water_leak"),
         SOLAR("solar", "Solar power now (W)", "sensor.solar_power"),
         SOLAR_TODAY("solar_today", "Solar made today (kWh)", "sensor.solar_generation"),
+        SOLAR_URL("solar_url", "Tapping the sail opens (a web page)", "https://solar.ozorhaar.com"),
         HOUSE_USE("house_use", "House using now (W)", "sensor.sense_monitor_total_power"),
         SMOKER("smoker", "Smoker (climate)", "climate.surtur_climate"),
         PROBE("probe", "Smoker probe (climate)", "climate.back_patio_smoker_probe"),

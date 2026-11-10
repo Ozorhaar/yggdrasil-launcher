@@ -483,6 +483,15 @@ fun LauncherRoot() {
         return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
     }
 
+    /** Whether a point falls on the longship's sail, while the ship is in its bay. */
+    fun sailHit(p: Offset): Boolean {
+        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return false
+        if (!com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipHome) return false
+        val n = layout.pages.size
+        val x = if (n > 1) ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.sailArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
+    }
+
     val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null || peekGate != null ||
         homeMenu || widgetPicker || widgetMenu != null
 
@@ -563,6 +572,13 @@ fun LauncherRoot() {
                                 look != null && homeLinkReady -> peekGate = look
                                 else -> ctx.openHomeAssistant()
                             }
+                            return@detectTapGestures
+                        }
+                        // the sail: the solar panels' page (icons over the sail keep their own taps)
+                        if (openFolder == null && sailHit(p)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            ctx.openUrl(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(
+                                ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.SOLAR_URL))
                             return@detectTapGestures
                         }
                         // the marks on the band: settings (left), Hafnir (right)

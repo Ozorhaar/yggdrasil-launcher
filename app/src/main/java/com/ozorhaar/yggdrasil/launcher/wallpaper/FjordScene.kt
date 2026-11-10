@@ -74,6 +74,19 @@ class FjordScene(ctx: Context) {
     private var feast = false
 
     companion object {
+        /** Whether the longship is in its bay (not sailed out of the fjord); the scene writes it each frame. */
+        @Volatile var shipHome = true
+
+        /** The sail (and a little room for the wind's belly) as a tap target. Must match the ship's drawing. */
+        fun sailArea(w: Int, h: Int, xOffset: Float): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val par = (xOffset - 0.5f) * -0.03f * w
+            val shipL = ox - 1440 * s * 0.02f + par; val shipT = oy + SHIP_TOP * s
+            return android.graphics.RectF(shipL + (SAIL_L - 16) * 1.04f * s, shipT + 6 * s,
+                shipL + (SAIL_R + 16) * 1.04f * s, shipT + (SAIL_B + 10) * s)
+        }
+
         /**
          * Where a raven perches on the longhouse's ridge (towards its left end, clear of the smoke
          * hole), in screen pixels for a w x h screen, plus the art's scale. Must match drawSteading.
@@ -509,6 +522,7 @@ class FjordScene(ctx: Context) {
             shipOut = if (shipOut < outTarget) min(outTarget, shipOut + step) else max(outTarget, shipOut - step)
         }
         val sailing = shipOut != outTarget
+        shipHome = shipOut < 0.1f
         val rowing = sailing || ((h0?.exportW ?: 0f) > 150f && cfg(Touch.OARS))
         if (shipOut < 0.995f) {
             val sl = lerp(1.15f, 0.65f, p.dark)
