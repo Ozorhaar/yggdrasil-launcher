@@ -100,7 +100,7 @@ class FjordScene(ctx: Context) {
             NETWORK(0f, 0f, floatArrayOf(40f, 1000f, 330f, 1330f), sky = true),
             PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
             FINANCE(150f, 1600f, floatArrayOf(-74f, -96f, 76f, 8f)),
-            VIDEO(460f, 1464f, floatArrayOf(-46f, -100f, 86f, 16f)),     // the skald on the ridge, drawn at 1.4: easy to find and tap
+            VIDEO(440f, 1466f, floatArrayOf(-70f, -100f, 96f, 22f)),     // the skald on the ridge, drawn at 1.4: easy to find and tap
             WORK(1225f, 1622f, floatArrayOf(-100f, -96f, 98f, 18f)),
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
             SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore

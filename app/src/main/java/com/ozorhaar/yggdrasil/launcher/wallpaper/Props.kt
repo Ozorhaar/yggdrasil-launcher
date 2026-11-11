@@ -156,6 +156,9 @@ internal class Props {
 
     /** Video: a skald by a little fire on the shore, his lyre on his knee. */
     fun skald(c: Canvas, stir: Boolean = false) {
+        // a low hump of the ridge itself under him and his fire, so they sit on any ground
+        path.reset(); path.moveTo(-50f, 16f); path.quadTo(-40f, 1f, -20f, 0f); path.lineTo(44f, 0f); path.quadTo(60f, 1f, 68f, 16f); path.close()
+        fill(mix(0x1a151f, 0x3b2f45, light)); c.drawPath(path, p)
         glow(c, 22f, -10f, if (stir) 80f else 58f, 0.25f + 0.45f * dark + (if (stir) 0.15f else 0f))
         stones(c, 22f, 6f, 3.4f)
         flames(c, 22f, -1f, 5.5f, if (stir) 28f else 16f)
