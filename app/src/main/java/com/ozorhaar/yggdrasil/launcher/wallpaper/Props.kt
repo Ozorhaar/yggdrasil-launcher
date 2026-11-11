@@ -21,6 +21,11 @@ internal class Props {
     private val rf = RectF()
 
     var light = 1f; var dark = 0f; var t = 0f; var forge = false
+    /** Snow lies on the roofs and stones. */
+    var snow = false
+    /** The print's progress, 0..100, while the printer works (-1 otherwise): the smithy's forge brightens with it. */
+    var printPct = -1
+    private val snowC get() = mix(0xDDE4EE, 0xF4F7FA, light)
 
     private fun mix(a: Int, b: Int, f: Float): Int {
         val k = f.coerceIn(0f, 1f)
@@ -100,10 +105,18 @@ internal class Props {
         path.reset(); path.moveTo(-14f, -4f); path.lineTo(-17f, -56f); path.quadTo(-16f, -82f, 0f, -88f)
         path.quadTo(16f, -84f, 17f, -58f); path.lineTo(14f, -10f); path.quadTo(10f, -2f, 4f, -8f)
         c.drawPath(path, p)
-        p.strokeWidth = 2f
-        val runes = floatArrayOf(-5f, -70f, -5f, -50f, -5f, -70f, 2f, -64f, -5f, -63f, 2f, -57f,
-            5f, -44f, 5f, -24f, 5f, -44f, -2f, -36f, -3f, -32f, 6f, -26f)
-        c.drawLines(runes, p)
+        // the rune of the day, cut large in the middle of the band
+        val r = RuneOfDay.today().strokes
+        var minX = 1f; var maxX = 0f
+        for (i in r.indices step 2) { minX = minOf(minX, r[i]); maxX = maxOf(maxX, r[i]) }
+        val gw = 22f; val gh = 44f; val ox = -(minX + maxX) / 2f * gw; val oy = -72f
+        p.strokeWidth = 2.6f
+        for (i in r.indices step 4) c.drawLine(ox + r[i] * gw, oy + r[i + 1] * gh, ox + r[i + 2] * gw, oy + r[i + 3] * gh, p)
+        if (snow) {
+            path.reset(); path.moveTo(-25f, -78f); path.quadTo(-23f, -97f, 0f, -103f); path.quadTo(23f, -98f, 25f, -78f)
+            path.lineTo(19f, -84f); path.quadTo(0f, -91f, -19f, -84f); path.close()
+            fill(snowC); c.drawPath(path, p)
+        }
     }
 
     /** Finance: a cave in the mountain's face, a dragon's gold heaped inside, glinting. */
@@ -112,6 +125,7 @@ internal class Props {
         fill(mix(0x030406, 0x14131a, light)); c.drawPath(path, p)
         stroke(rock, 7f)
         path.reset(); path.moveTo(-70f, 3f); path.quadTo(-68f, -78f, 0f, -91f); path.quadTo(66f, -80f, 72f, 3f); c.drawPath(path, p)
+        if (snow) { stroke(snowC, 4f); path.reset(); path.moveTo(-58f, -48f); path.quadTo(-52f, -86f, 0f, -95f); path.quadTo(52f, -88f, 60f, -50f); c.drawPath(path, p) }
         glow(c, 0f, -12f, 70f, 0.18f + 0.32f * dark, GOLD)
         path.reset(); path.moveTo(-50f, 0f); path.quadTo(-36f, -24f, -12f, -30f); path.quadTo(10f, -36f, 30f, -22f)
         path.quadTo(44f, -12f, 52f, 0f); path.close()
@@ -167,10 +181,18 @@ internal class Props {
         path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f); path.close()
         fill(mix(0x0b0e15, 0x3a3638, light)); c.drawPath(path, p)
         fill(rock); c.drawRect(30f, -88f, 44f, -50f, p)
-        val heat = 0.7f + 0.3f * sin(t * 0.004f) * (if (forge) 1.6f else 1f)
-        glow(c, -8f, -16f, 46f, (0.25f + 0.45f * dark) * heat)
+        val prog = if (forge && printPct >= 0) printPct.coerceIn(0, 100) / 100f else -1f
+        val heat = (0.7f + 0.3f * sin(t * 0.004f) * (if (forge) 1.6f else 1f)) * (if (prog >= 0f) 0.6f + 0.6f * prog else 1f)
+        glow(c, -8f, -16f, 46f + (if (prog >= 0f) 20f * prog else 0f), (0.25f + 0.45f * dark) * heat)
         fill(argb(0.55f + 0.4f * heat * (0.5f + 0.5f * dark), EMBER)); c.drawRect(-20f, -32f, 4f, 2f, p)
-        fill(argb(0.35f * heat, GOLD)); c.drawRect(-16f, -12f, 0f, -2f, p)
+        if (prog >= 0f) { fill(argb(0.9f, GOLD)); c.drawRect(-18f, 1f - 32f * prog, 2f, 1f, p) }      // the print, rising like a pour
+        else { fill(argb(0.35f * heat, GOLD)); c.drawRect(-16f, -12f, 0f, -2f, p) }
+        if (snow) {
+            path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f)
+            path.lineTo(60f, -42f); path.quadTo(34f, -65f, 0f, -69f); path.quadTo(-34f, -65f, -60f, -42f); path.close()
+            fill(snowC); c.drawPath(path, p)
+            stroke(snowC, 3f); c.drawLine(-96f, 1f, 92f, 1f, p)
+        }
         fill(mix(0x07080b, 0x26262a, light)); c.drawRect(-82f, -10f, -72f, 2f, p)
         path.reset(); path.moveTo(-92f, -10f); path.lineTo(-62f, -10f); path.quadTo(-58f, -15f, -64f, -18f); path.lineTo(-90f, -18f); path.close()
         c.drawPath(path, p)
@@ -219,13 +241,16 @@ internal class Props {
         }
     }
 
-    private fun knarrShape(c: Canvas, lantern: Boolean) {
+    private fun knarrShape(c: Canvas, lantern: Boolean, furled: Boolean = false) {
         stroke(darkC, 4f); c.drawLine(0f, -12f, 0f, -150f, p)
         p.strokeWidth = 5f; c.drawLine(-62f, -142f, 62f, -142f, p)
         p.strokeWidth = 1.6f; c.drawLines(floatArrayOf(0f, -150f, -112f, -30f, 0f, -150f, 112f, -30f), p)
         val sl = 0.55f + 0.45f * light
-        for (i in 0 until 6) { fill(mix(if (i % 2 == 1) BONE else FROST, 0x000000, 1 - sl)); c.drawRect(-56f + i * 18.6f, -139f, -56f + i * 18.6f + 18.8f, -69f, p) }
-        fill(0x40000000); c.drawRect(-56f, -139f, 56f, -69f, p)
+        if (furled) { stroke(mix(BONE, 0x000000, 1 - sl), 7f); c.drawLine(-58f, -137f, 58f, -137f, p) }
+        else {
+            for (i in 0 until 6) { fill(mix(if (i % 2 == 1) BONE else FROST, 0x000000, 1 - sl)); c.drawRect(-56f + i * 18.6f, -139f, -56f + i * 18.6f + 18.8f, -69f, p) }
+            fill(0x40000000); c.drawRect(-56f, -139f, 56f, -69f, p)
+        }
         fill(mix(0x2a2016, 0x8a6e4a, light))
         for (b in arrayOf(-82f to 26f, -54f to 22f, 48f to 24f, 74f to 22f)) { rf.set(b.first, -30f, b.first + b.second, -12f); c.drawRoundRect(rf, 5f, 5f, p) }
         path.reset(); path.moveTo(-118f, -36f); path.quadTo(-112f, -10f, -96f, -12f); path.lineTo(96f, -12f); path.quadTo(112f, -10f, 118f, -36f)
@@ -249,6 +274,13 @@ internal class Props {
         c.restoreToCount(layer)
         c.save(); c.translate(0f, bob); c.rotate(roll); knarrShape(c, stir); c.restore()
         stroke(argb(0.18f, 0xDDE6F5), 1.5f); c.drawLines(floatArrayOf(-120f, 6f, -90f, 6f, 92f, 6f, 124f, 6f), p)
+    }
+
+    /** The knarr drawn up on the shore for the cold, its sail furled (no reflection: it's on land). */
+    fun knarrBeached(c: Canvas, stir: Boolean = false) {
+        c.save(); c.rotate(-5f); knarrShape(c, stir, furled = true)
+        if (snow) { stroke(snowC, 3f); c.drawLine(-100f, -13f, 100f, -13f, p) }
+        c.restore()
     }
 
     companion object {

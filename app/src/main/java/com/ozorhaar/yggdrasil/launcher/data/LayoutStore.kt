@@ -479,6 +479,26 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** Moves what's at [src] (an app) into folder [folderId], e.g. dropped on one of the scene's places. */
+    fun moveIntoFolder(src: Loc, folderId: String) {
+        val f = folders[folderId] ?: return
+        val dragged = itemAt(src) ?: return
+        if (isFolderRef(dragged)) return
+        val srcFolder = (src as? Loc.InFolder)?.let { folders[it.id] }
+        if (srcFolder?.id == folderId) return
+        if (srcFolder != null) srcFolder.apps.removeAt((src as Loc.InFolder).index) else setAt(src, null)
+        if (dragged !in f.apps) f.apps.add(dragged)
+        srcFolder?.let { dissolveIfSmall(it) }
+        trimEmptyPages()
+        save()
+    }
+
+    /** Adds an app to folder [folderId] (from its menu); it stays wherever else it is. */
+    fun addAppToFolder(key: String, folderId: String) {
+        val f = folders[folderId] ?: return
+        if (key !in f.apps) { f.apps.add(key); save() }
+    }
+
     /** Takes these folders' tiles off the home grid and dock; the folders stay (the scene opens them). */
     fun takeOffGrid(ids: Collection<String>) {
         ids.forEach { id -> folders[id]?.let { replaceRef(it.ref, null) } }

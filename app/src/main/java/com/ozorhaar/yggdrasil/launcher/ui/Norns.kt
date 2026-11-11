@@ -251,3 +251,10 @@ private fun openCalendar(ctx: Context, t: Thread?) {
     if (runCatching { ctx.startActivity(cal) }.isSuccess) return
     ctx.packageManager.getLaunchIntentForPackage(NornsCard.NINE)?.let { runCatching { ctx.startActivity(it) } }
 }
+
+
+/** Whether a (timed) event begins within [withinMs] from now: the Saga turns to the Norns. */
+internal fun nornsSoon(ctx: Context, withinMs: Long): Boolean = runCatching {
+    val now = System.currentTimeMillis()
+    upcoming(ctx, 3).any { !it.allDay && it.begin - now in 0..withinMs }
+}.getOrDefault(false)

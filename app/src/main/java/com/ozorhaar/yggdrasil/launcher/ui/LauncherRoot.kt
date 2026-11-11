@@ -102,6 +102,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.geometry.Offset
@@ -196,6 +197,9 @@ fun LauncherRoot() {
         while (true) { value = com.ozorhaar.yggdrasil.launcher.wallpaper.Birthday.today(ctx); kotlinx.coroutines.delay(5_000L) }
     }
     var hornRect by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    /** A place's folder peeked at by holding the place: (folder id, where). Its most-used apps fan out there. */
+    var peek by remember { mutableStateOf<Pair<String, Offset>?>(null) }
+    var peekRune by remember { mutableStateOf(false) }
     /** Where a folder opened from the scene was tapped (it grows out of that spot); null for a tile. */
     var folderFrom by remember { mutableStateOf<Offset?>(null) }
     /** Until when the scene's places are outlined with what they open (the home menu's Places). */
@@ -297,6 +301,7 @@ fun LauncherRoot() {
      * unlocked doesn't ask twice.
      */
     fun launch(app: AppEntry, insideUnlockedFolder: Boolean = false) {
+        com.ozorhaar.yggdrasil.launcher.data.Usage.bump(ctx, app.key)
         val inFolderLock = !insideUnlockedFolder && (layout.inLockedFolder(app.key) || (app.isShortcut && layout.inLockedFolder(app.packageName)))
         if (layout.isLocked(app.key) || (app.isShortcut && layout.isLocked(app.packageName)) || inFolderLock)
             Guard.check(ctx, "Open ${app.label}") { ygg.repo.launch(app) }
@@ -397,6 +402,47 @@ fun LauncherRoot() {
         drag.widgetTargetOk = layout.rectFree(page, x, y, spot.w, spot.h, ignoreWidget = spot.id)
     }
 
+    /** Where the wallpaper is across the pages (0 = first page, 1 = last), as the scene reads it. */
+    fun wallX(): Float {
+        val n = layout.pages.size
+        return if (n > 1) ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
+    }
+
+    /** Which part of the longship is under a point (the wolf heads, the hull), if any. */
+    fun shipPartAt(p: Offset) =
+        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) null
+        else com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPart(rootSize[0], rootSize[1], wallX(), p.x, p.y)
+
+    /** A folder by its name (the scene's places open folders by name). */
+    fun folderNamed(name: String) = layout.folders.values.firstOrNull { it.name.trim().equals(name, ignoreCase = true) }
+
+    /** Opens an app by package (or, failing that, by its label); says so if it isn't installed. */
+    fun launchPackage(name: String, vararg pkgs: String, labels: List<String> = emptyList()) {
+        val all = byKeyNow.values.filter { !it.isShortcut }
+        val app = all.firstOrNull { it.packageName in pkgs } ?: all.firstOrNull { it.label.trim().lowercase() in labels }
+        if (app != null) launch(app) else Toast.makeText(ctx, "$name isn't installed", Toast.LENGTH_SHORT).show()
+    }
+
+    /** The folder an entry in the steading's settings names. */
+    fun cfgFolder(e: com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities) =
+        folderNamed(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e))
+
+    /** Which of the scene's places is under a point, if the folders live in the scene. */
+    fun placeAt(p: Offset): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place? {
+        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return null
+        if (!com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.PLACES)) return null
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.entries.firstOrNull { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(rootSize[0], rootSize[1], wallX(), it).contains(p.x, p.y) }
+    }
+
+    /** The place under a point that can take an app (a Place's name, or CAR for the hull). */
+    fun placeKeyAt(p: Offset): String? =
+        placeAt(p)?.name ?: if (shipPartAt(p) == com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL) "CAR" else null
+
+    /** The folder a place key opens. */
+    fun folderForKey(k: String) =
+        if (k == "CAR") cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_CAR)
+        else runCatching { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.valueOf(k) }.getOrNull()?.let { cfgFolder(placeEntity(it)) }
+
     // ---------------------------------------------------------- drag and drop
     fun updateHover() {
         if (drag.widgetId != null) { updateWidgetTarget(); return }
@@ -406,6 +452,12 @@ fun LauncherRoot() {
         drag.hoverInto = loc != null && loc != drag.src && target != null &&
             !isFolderRef(drag.item) && target != (drag.src as? Loc.InFolder)?.let { FOLDER_PREFIX + it.id } &&
             drag.overCentre(drag.pos, loc)
+        // an app held for a moment over one of the scene's places (not over another icon) goes into its folder
+        val cand = if (target == null && !isFolderRef(drag.item) && openFolder == null) placeKeyAt(drag.pos) else null
+        val nowMs = SystemClock.uptimeMillis()
+        if (cand != drag.placeCand) { drag.placeCand = cand; drag.placeSince = nowMs; drag.placeHover = null }
+        else if (cand != null && nowMs - drag.placeSince > 450L) drag.placeHover = cand
+        if (drag.placeHover != null) { drag.hover = null; drag.hoverInto = false }
     }
 
     /** True only when an actual icon (not an empty slot) is under [p]. */
@@ -449,7 +501,13 @@ fun LauncherRoot() {
             else byKeyNow[item]?.let { menu = MenuTarget(it, if (src is Loc.Dock) From.DOCK else From.HOME) }
         } else {
             updateHover()
-            drag.hover?.let { dst -> layout.drop(src, dst, drag.hoverInto) }
+            val ph = drag.placeHover
+            val pf = ph?.let { folderForKey(it) }
+            if (pf != null) {
+                layout.moveIntoFolder(src, pf.id)
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                Toast.makeText(ctx, "${byKeyNow[item]?.label ?: "It"} is in ${pf.name} now", Toast.LENGTH_SHORT).show()
+            } else drag.hover?.let { dst -> layout.drop(src, dst, drag.hoverInto) }
         }
         drag.reset()
     }
@@ -494,38 +552,6 @@ fun LauncherRoot() {
         return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
     }
 
-    /** Where the wallpaper is across the pages (0 = first page, 1 = last), as the scene reads it. */
-    fun wallX(): Float {
-        val n = layout.pages.size
-        return if (n > 1) ((pager.currentPage + pager.currentPageOffsetFraction) / (n - 1)).coerceIn(0f, 1f) else 0.5f
-    }
-
-    /** Which part of the longship is under a point (the wolf heads, the hull), if any. */
-    fun shipPartAt(p: Offset) =
-        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) null
-        else com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPart(rootSize[0], rootSize[1], wallX(), p.x, p.y)
-
-    /** A folder by its name (the scene's places open folders by name). */
-    fun folderNamed(name: String) = layout.folders.values.firstOrNull { it.name.trim().equals(name, ignoreCase = true) }
-
-    /** Opens an app by package (or, failing that, by its label); says so if it isn't installed. */
-    fun launchPackage(name: String, vararg pkgs: String, labels: List<String> = emptyList()) {
-        val all = byKeyNow.values.filter { !it.isShortcut }
-        val app = all.firstOrNull { it.packageName in pkgs } ?: all.firstOrNull { it.label.trim().lowercase() in labels }
-        if (app != null) launch(app) else Toast.makeText(ctx, "$name isn't installed", Toast.LENGTH_SHORT).show()
-    }
-
-    /** The folder an entry in the steading's settings names. */
-    fun cfgFolder(e: com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities) =
-        folderNamed(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e))
-
-    /** Which of the scene's places is under a point, if the folders live in the scene. */
-    fun placeAt(p: Offset): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place? {
-        if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return null
-        if (!com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.PLACES)) return null
-        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.entries.firstOrNull { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(rootSize[0], rootSize[1], wallX(), it).contains(p.x, p.y) }
-    }
-
     /** Whether a point falls on the longship's sail, while the ship is in its bay. */
     fun sailHit(p: Offset): Boolean {
         if (rootSize[0] == 0 || layout.layoutMode != LayoutMode.GRID) return false
@@ -535,7 +561,7 @@ fun LauncherRoot() {
         return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.sailArea(rootSize[0], rootSize[1], x).contains(p.x, p.y)
     }
 
-    val overlayOpen = drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null || peekGate != null ||
+    val overlayOpen = peek != null || drawerOpen || settingsOpen || searchOpen || menu != null || openFolder != null || peekGate != null ||
         homeMenu || widgetPicker || widgetMenu != null
 
     Box(
@@ -548,7 +574,7 @@ fun LauncherRoot() {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     drag.ownedGesture = false
-                    if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null || peekGate != null)
+                    if (drawerOpen || settingsOpen || searchOpen || menu != null || homeMenu || widgetPicker || widgetMenu != null || peekGate != null || peek != null)
                         return@awaitEachGesture
                     // a tap on the raven is the raven's, not the icon's under it
                     // a tap on the longhouse is the longhouse's, not an icon's under it
@@ -711,6 +737,17 @@ fun LauncherRoot() {
                             return@detectTapGestures
                         }
                         if (footRects.values.any { it.inflate(10f).contains(p) }) return@detectTapGestures
+                        // hold a place in the scene (or the longship's hull): its folder's most-used apps fan out there
+                        if (openFolder == null) {
+                            val k = placeKeyAt(p)
+                            val f = k?.let { folderForKey(it) }
+                            if (f != null) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                peekRune = k == "PERSONAL"
+                                peek = f.id to p
+                                return@detectTapGestures
+                            }
+                        }
                         // hold the longhouse: the Smart Home folder
                         if (openFolder == null && steadingHit(p)) {
                             cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SMART_HOME)?.let {
@@ -800,16 +837,16 @@ fun LauncherRoot() {
                 if (count(cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SMART_HOME)) > 0) add("SMART_HOME")
             }
             androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.stirring = stir }
-            SceneMarks(revealing) {
+            SceneMarks(revealing, drag.placeHover) {
                 val w = rootSize[0]; val h = rootSize[1]; val x = wallX()
                 val out = ArrayList<SceneMark>()
                 if (places) for (pl in com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.entries) {
                     val e = placeEntity(pl); val f = cfgFolder(e)
-                    out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(w, h, x, pl), com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e), count(f))
+                    out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(w, h, x, pl), com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e), count(f), pl.name)
                 }
                 if (com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipHome) {
                     val car = cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_CAR)
-                    out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL), car?.name ?: "Car", count(car))
+                    out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL), car?.name ?: "Car", count(car), "CAR")
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.FREKI), "Life360", 0)
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.GERI), "My BMW", 0)
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.sailArea(w, h, x), "Solar", 0)
@@ -860,6 +897,15 @@ fun LauncherRoot() {
 
         openFolder?.let { id -> layout.folders[id] }?.let { folder ->
             FolderPopup(folder, layout, byKey, icons, badges, drag, onClose = { openFolder = null }, origin = folderFrom)
+        }
+        peek?.let { (fid, at) -> layout.folders[fid]?.let { it to at } }?.let { (f, at) ->
+            PlacePeek(
+                f, at, byKey, icons, layout.runicLabels,
+                if (peekRune) com.ozorhaar.yggdrasil.launcher.wallpaper.RuneOfDay.today() else null,
+                onOpen = { peek = null; folderFrom = at; showFolder(f) },
+                onLaunch = { app -> peek = null; launch(app) },
+                onClose = { peek = null },
+            )
         }
 
         // the icon riding under your finger
@@ -1752,6 +1798,22 @@ private fun ActionSheet(
                     onDismiss()
                 }
             }
+            // put it in one of the folders that live in the scene
+            val places = com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.PLACE_FOLDERS.mapNotNull { e ->
+                val n = com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e).trim()
+                layout.folders.values.firstOrNull { it.name.trim().equals(n, ignoreCase = true) }
+            }.distinctBy { it.id }.filter { app.key !in it.apps }
+            if (places.isNotEmpty()) {
+                var placing by remember(app.key) { mutableStateOf(false) }
+                if (!placing) SheetItem("Put in a place…") { placing = true }
+                else places.forEach { f ->
+                    SheetItem("→ " + f.name) {
+                        layout.addAppToFolder(app.key, f.id)
+                        Toast.makeText(ctx, "${app.label} is in ${f.name} now", Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                }
+            }
             SheetItem("App info") { repo.openAppInfo(app); onDismiss() }
             if (!app.isShortcut) SheetItem("Uninstall", Ygg.Ember) { ctx.uninstall(app.packageName); onDismiss() }
         }
@@ -1913,7 +1975,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nThe marks at the band's foot: voicemail, camera, gallery, Proton Pass (hold the shield: Proton Authenticator)\nTap a wolf head on the longship: Life360 (stern) or My BMW (bow); the hull: Car\nHold the longhouse: Smart Home\nTap the World Tree, runestone, cave, skald, smithy, cookfire or knarr: their folders\nHold empty space, then Places: see what each spot in the scene opens\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nThe marks at the band's foot: voicemail, camera, gallery, Proton Pass (hold the shield: Proton Authenticator)\nTap a wolf head on the longship: Life360 (stern) or My BMW (bow); the hull: Car\nHold the longhouse: Smart Home\nTap the World Tree, runestone, cave, skald, smithy, cookfire or knarr: their folders\nHold empty space, then Places: see what each spot in the scene opens\nHold a place: its most-used apps (the runestone: the rune of the day)\nDrag an app onto a place and hold it there a moment: into that folder\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
@@ -2038,7 +2100,7 @@ fun RuneButton(text: String, onClick: () -> Unit) {
 private const val ICON_SCALE = 0.8f
 
 /** Opens the Home Assistant companion app (full or minimal build). */
-private fun android.content.Context.openHomeAssistant() {
+internal fun android.content.Context.openHomeAssistant() {
     val pkgs = listOf("io.homeassistant.companion.android", "io.homeassistant.companion.android.minimal")
     val intent = pkgs.firstNotNullOfOrNull { packageManager.getLaunchIntentForPackage(it) }
     if (intent != null) runCatching { startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -2058,14 +2120,14 @@ private fun placeEntity(pl: com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene
 }
 
 /** A spot in the scene: where it is on screen, what it opens, and how many unread wait there. */
-private class SceneMark(val r: android.graphics.RectF, val label: String, val count: Int)
+private class SceneMark(val r: android.graphics.RectF, val label: String, val count: Int, val key: String = "")
 
 /**
  * Over the wallpaper, under the icons: while [revealing], a gold outline round every place with
  * what it opens. (A place whose folder has something waiting stirs in the wallpaper itself.)
  */
 @Composable
-private fun SceneMarks(revealing: Boolean, marks: () -> List<SceneMark>) {
+private fun SceneMarks(revealing: Boolean, dropOn: String?, marks: () -> List<SceneMark>) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val fade by androidx.compose.animation.core.animateFloatAsState(if (revealing) 1f else 0f, androidx.compose.animation.core.tween(350), label = "places")
     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
@@ -2076,6 +2138,21 @@ private fun SceneMarks(revealing: Boolean, marks: () -> List<SceneMark>) {
             typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
         val pen = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        // the place a dragged app will go into
+        if (dropOn != null) list.firstOrNull { it.key == dropOn }?.let { m ->
+            pen.style = android.graphics.Paint.Style.STROKE; pen.strokeWidth = 3f * dp; pen.color = 0xFFECD08F.toInt()
+            nc.drawRoundRect(m.r, 10f * dp, 10f * dp, pen)
+            pen.strokeWidth = 9f * dp; pen.color = 0x40ECD08F
+            nc.drawRoundRect(m.r, 10f * dp, 10f * dp, pen)
+            text.textSize = 13f * dp; text.color = 0xFFE8DCC4.toInt()
+            val label = "Into " + m.label
+            val tw = text.measureText(label)
+            val tx = (m.r.centerX() - tw / 2).coerceIn(4f * dp, size.width - tw - 4f * dp)
+            val ty = if (m.r.top > 26f * dp) m.r.top - 8f * dp else m.r.bottom + 18f * dp
+            pen.style = android.graphics.Paint.Style.FILL; pen.color = 0xE00B0E15.toInt()
+            nc.drawRoundRect(tx - 6f * dp, ty - 14f * dp, tx + tw + 6f * dp, ty + 5f * dp, 6f * dp, 6f * dp, pen)
+            nc.drawText(label, tx, ty, text)
+        }
         if (fade > 0.01f) for (m in list) {
             pen.style = android.graphics.Paint.Style.STROKE; pen.strokeWidth = 2f * dp
             pen.color = android.graphics.Color.argb((220 * fade).toInt(), 0xEC, 0xD0, 0x8F)
@@ -2087,6 +2164,63 @@ private fun SceneMarks(revealing: Boolean, marks: () -> List<SceneMark>) {
             pen.style = android.graphics.Paint.Style.FILL; pen.color = android.graphics.Color.argb((200 * fade).toInt(), 0x0B, 0x0E, 0x15)
             nc.drawRoundRect(tx - 5f * dp, ty - 13f * dp, tx + tw + 5f * dp, ty + 4f * dp, 6f * dp, 6f * dp, pen)
             nc.drawText(m.label, tx, ty, text)
+        }
+    }
+}
+
+
+/**
+ * Holding a place in the scene: its folder's three most-used apps fan out on a carved plate at the
+ * spot, with the folder's name to open the whole of it. The runestone adds the rune of the day.
+ */
+@Composable
+private fun PlacePeek(
+    folder: com.ozorhaar.yggdrasil.launcher.data.Folder,
+    at: Offset,
+    byKey: Map<String, AppEntry>,
+    icons: ShieldIcons,
+    runic: Boolean,
+    rune: com.ozorhaar.yggdrasil.launcher.wallpaper.RuneOfDay.Rune?,
+    onOpen: () -> Unit,
+    onLaunch: (AppEntry) -> Unit,
+    onClose: () -> Unit,
+) {
+    val ctx = LocalContext.current
+    val top = remember(folder.id, folder.apps.size) {
+        com.ozorhaar.yggdrasil.launcher.data.Usage.top(ctx, folder.apps.filter { byKey.containsKey(it) }, 3).mapNotNull { byKey[it] }
+    }
+    var plate by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier.fillMaxSize().background(Color(0x55000000))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onClose() },
+    ) {
+        val maxW = constraints.maxWidth; val maxH = constraints.maxHeight
+        Column(
+            Modifier
+                .onSizeChanged { plate = it }
+                .offset {
+                    androidx.compose.ui.unit.IntOffset(
+                        (at.x - plate.width / 2f).toInt().coerceIn(8, (maxW - plate.width - 8).coerceAtLeast(8)),
+                        (at.y - plate.height - 28f).toInt().coerceIn(8, (maxH - plate.height - 8).coerceAtLeast(8)),
+                    )
+                }
+                .background(Ygg.Night2.copy(alpha = 0.97f), CutCornerShape(14.dp))
+                .border(1.5.dp, Ygg.Gold.copy(alpha = 0.7f), CutCornerShape(14.dp))
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (rune != null) {
+                RuneText(rune.glyph + "  " + rune.name, 19.sp, Ygg.Gold)
+                Text(rune.meaning, color = Ygg.Bone, fontSize = 13.sp)
+                Spacer(Modifier.height(8.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                top.forEach { app ->
+                    Box(Modifier.clickable { onLaunch(app) }) { AppTile(app, icons, 0, runic, 52.dp, showLabel = true) }
+                }
+                Box(Modifier.clickable { onOpen() }.padding(8.dp)) { RuneText(folder.name + " ›", 15.sp, Ygg.Frost) }
+            }
         }
     }
 }

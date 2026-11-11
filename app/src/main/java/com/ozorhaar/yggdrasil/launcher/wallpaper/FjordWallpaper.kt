@@ -131,7 +131,12 @@ class FjordWallpaper : WallpaperService() {
                 val h = runCatching { link.glance() }.getOrNull() ?: return@thread
                 handler.post {
                     if (scene?.house != h) {
+                        val before = scene?.house
                         scene?.house = h
+                        // the print is done: the smith's anvil rings (if the print had got near the end)
+                        if (before?.forge == true && !h.forge && before.printPct >= 95 &&
+                            com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(applicationContext, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.FORGE))
+                            com.ozorhaar.yggdrasil.launcher.ui.Carved.play(applicationContext, com.ozorhaar.yggdrasil.launcher.ui.Carved.Sound.ANVIL)
                         if (visible) drawFrame()
                     }
                 }

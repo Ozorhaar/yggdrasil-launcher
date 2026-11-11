@@ -85,6 +85,9 @@ class FjordScene(ctx: Context) {
         @Volatile var stirring: Set<String> = emptySet()
             set(v) { if (v != field) { field = v; wake?.invoke() } }
 
+        /** The fjord has iced over in a long cold spell: the knarr is drawn up on the shore. */
+        @Volatile var beached = false
+
         /** Whether the longship is in its bay (not sailed out of the fjord); the scene writes it each frame. */
         @Volatile var shipHome = true
 
@@ -109,10 +112,12 @@ class FjordScene(ctx: Context) {
             val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
             val par = (xOffset - 0.5f) * -0.03f * w
             val landX = ox - 1440 * s * 0.02f + par
-            val b = pl.box
+            val b = if (pl == Place.SHOP && beached) floatArrayOf(-80f, -110f, 85f, 12f) else pl.box
+            val ax = if (pl == Place.SHOP && beached) 1150f else pl.ax
+            val ay = if (pl == Place.SHOP && beached) 1938f else pl.ay
             return if (pl.sky) android.graphics.RectF(ox + b[0] * s, oy + b[1] * s, ox + b[2] * s, oy + b[3] * s)
             else {
-                val x = landX + pl.ax * 1.04f * s; val y = oy + pl.ay * s
+                val x = landX + ax * 1.04f * s; val y = oy + ay * s
                 android.graphics.RectF(x + b[0] * s, y + b[1] * s, x + b[2] * s, y + b[3] * s)
             }
         }
@@ -205,6 +210,10 @@ class FjordScene(ctx: Context) {
     private val prefs = ctx.applicationContext.getSharedPreferences("weather", Context.MODE_PRIVATE)
     /** When snow was last seen falling (it then lies on the roofs while it stays at freezing). */
     private var snowAt = prefs.getLong("snow_at", 0L)
+    /** Since when it's stayed at 20 °F or below (0 = not cold): after two days the fjord's edges ice over. */
+    private var coldSince = prefs.getLong("cold_since", 0L)
+    /** When rain last fell: for a while after, with the sun out, a rainbow (Bifröst) stands over the fjord. */
+    private var rainAt = prefs.getLong("rain_at", 0L)
     /** 0 = the longship in its bay, 1 = gone out of the fjord; -1 until the house is first read. */
     private var shipOut = -1f
 
@@ -230,6 +239,10 @@ class FjordScene(ctx: Context) {
         val fire: Boolean = false,
         /** The Bambu printer is working: sparks fly from the forge chimney. */
         val forge: Boolean = false,
+        /** The print's progress (0..100) while the printer works, else -1: the smithy's forge brightens with it. */
+        val printPct: Int = -1,
+        /** Who's on the move (driving): FREKI for the first of the household, GERI for the second; their eyes glow. */
+        val movers: Set<String> = emptySet(),
     ) {
         /** Neither Jason nor Leah is home: the longship is away. */
         val away: Boolean get() = !hearth
@@ -390,6 +403,22 @@ class FjordScene(ctx: Context) {
         val snowCover = skyKind == Weather.Sky.SNOW ||
             (demo == null && realNow - snowAt < 36 * 3600_000L && (wx?.tempF ?: 99) <= 33)
         val light = 1f - p.dark
+        // the seasons: a long cold spell ices the fjord's edges (and the knarr is drawn up on the shore);
+        // after rain, with the sun out, Bifröst stands over the fjord for a while
+        val tempF = wx?.tempF
+        if (demo == null && tempF != null) {
+            if (tempF <= 20 && coldSince == 0L) { coldSince = realNow; prefs.edit().putLong("cold_since", realNow).apply() }
+            if (tempF >= 28 && coldSince != 0L) { coldSince = 0L; prefs.edit().putLong("cold_since", 0L).apply() }
+        }
+        val iced = coldSince != 0L && realNow - coldSince > 48 * 3600_000L
+        beached = iced && cfg(Touch.PLACES)
+        if (demo == null && (skyKind == Weather.Sky.RAIN || skyKind == Weather.Sky.DRIZZLE || skyKind == Weather.Sky.THUNDER) && realNow - rainAt > 60_000L) {
+            rainAt = realNow; prefs.edit().putLong("rain_at", realNow).apply()
+        }
+        val sinceRain = realNow - rainAt
+        val bowA = if ((skyKind == Weather.Sky.CLEAR || skyKind == Weather.Sky.PARTLY) && sinceRain in 0..45 * 60_000L)
+            (1f - sinceRain / (45f * 60_000f)) * (1f - p.dark * 2f).coerceIn(0f, 1f) else 0f
+        props.snow = snowCover
         val grey = mix(0xFF2A2E36.toInt(), 0xFF8A919C.toInt(), light)
         val top = mix(p.top, grey, cloud * 0.8f)
         val mid = mix(p.mid, grey, cloud * 0.85f)
@@ -567,6 +596,8 @@ class FjordScene(ctx: Context) {
 
         if (fireworks) drawFireworks(c, w, hz, s, t, true)
 
+        if (bowA > 0.02f) drawRainbow(c, w, h, hz, s, bowA)
+
         // reflection of the mountains
         c.save()
         c.scale(1f, -1f, 0f, hz)
@@ -592,6 +623,7 @@ class FjordScene(ctx: Context) {
         }
 
         // mountains
+        if (iced) drawIce(c, w, hz, s, light, t)
         paint.colorFilter = landFilter; paint.alpha = 255
         rect.set(landX, landTop, landX + landW, landBot)
         c.drawBitmap(land, null, rect, paint)
@@ -656,6 +688,15 @@ class FjordScene(ctx: Context) {
             paint.colorFilter = null; paint.alpha = 255
             if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
             if (feast) dressShip(c, shipL, shipT, s, t, fade)
+            // the wolves' eyes glow while one of the household is on the move: Freki's for the first, Geri's for the second
+            val mv = h0?.movers ?: emptySet()
+            if (showPlaces && mv.isNotEmpty()) for ((key, ex) in listOf("FREKI" to 128.3f, "GERI" to 1023.7f)) if (key in mv) {
+                val x = shipL + ex * 1.04f * s; val y = shipT + 156.8f * s
+                val pulse = 0.6f + 0.4f * sin(t * 0.005f)
+                paint.shader = RadialGradient(x, y, 18 * s, intArrayOf(argb(0.8f * pulse * fade, 0xFFE0703A.toInt()), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(x, y, 18 * s, paint); paint.shader = null
+                paint.color = argb(fade, 0xFFFFC27A.toInt()); c.drawCircle(x, y, 3.4f * s, paint)
+            }
             // something waits in Car: a gleam runs along the shields
             if (showPlaces && "CAR" in stirring) {
                 val ph = (t % 2600f) / 2600f
@@ -685,7 +726,8 @@ class FjordScene(ctx: Context) {
         val busy = (house?.leak == true && showLeak) || (house?.fire == true && showFire) || (house?.forge == true && showForge)
         frameMs = when {
             animating || sailing -> 66L
-            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy || (showPlaces && stirring.isNotEmpty()) -> 125L
+            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy || (showPlaces && stirring.isNotEmpty()) ||
+                (showPlaces && house?.movers?.isNotEmpty() == true) -> 125L
             else -> 60_000L
         }
         animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy ||
@@ -1234,11 +1276,16 @@ class FjordScene(ctx: Context) {
     private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {
         props.light = light; props.dark = dark; props.t = t
         props.forge = house?.forge == true && showForge
+        props.printPct = house?.printPct ?: -1
         val st = stirring
         for (pl in Place.entries) {
             if (pl.sky) continue
             val stir = pl.name in st
             c.save()
+            if (pl == Place.SHOP && beached) {
+                c.translate(landX + 1150f * 1.04f * s, oy + 1938f * s); c.scale(s * 0.7f, s * 0.7f)
+                props.knarrBeached(c, stir); c.restore(); continue
+            }
             c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s)
             if (pl == Place.SHOP) c.scale(s * 0.85f, s * 0.85f) else c.scale(s, s)
             when (pl) {
@@ -1252,6 +1299,47 @@ class FjordScene(ctx: Context) {
             }
             c.restore()
         }
+    }
+
+    /** Bifröst after rain: a faint rainbow arched over the fjord, behind the mountains. */
+    private fun drawRainbow(c: Canvas, w: Int, h: Int, hz: Float, s: Float, a: Float) {
+        val cols = intArrayOf(0xFFE05050.toInt(), 0xFFE0A040.toInt(), 0xFFE8D860.toInt(), 0xFF70C070.toInt(), 0xFF6090E0.toInt(), 0xFF8A70D0.toInt())
+        c.save(); c.clipRect(0f, 0f, w.toFloat(), hz)
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = 10f * s
+        val cx = w * 0.62f; val cy = hz + h * 0.06f; val r0 = w * 0.78f
+        for ((i, col) in cols.withIndex()) {
+            val r = r0 - i * 10f * s
+            paint.color = argb(0.16f * a, col)
+            c.drawCircle(cx, cy, r, paint)
+        }
+        paint.style = Paint.Style.FILL
+        c.restore()
+    }
+
+    /** A long cold spell: shelves of ice along the fjord's edges, cracked, with the light on them. */
+    private fun drawIce(c: Canvas, w: Int, hz: Float, s: Float, light: Float, t: Float) {
+        val ice = mix(0xFF8FA6BC.toInt(), 0xFFE6EEF4.toInt(), light)
+        val path = android.graphics.Path()
+        for (side in 0..1) {
+            val x0 = if (side == 0) 0f else w * 0.70f; val x1 = if (side == 0) w * 0.30f else w.toFloat()
+            path.reset(); path.moveTo(x0, hz)
+            var x = x0
+            while (x <= x1) {
+                val edge = if (side == 0) (x1 - x) / (x1 - x0) else (x - x0) / (x1 - x0)
+                path.lineTo(x, hz + (8f + 52f * edge + 6f * sin(x / (23f * s))) * s)
+                x += 8f * s
+            }
+            path.lineTo(x1, hz); path.close()
+            paint.color = argb(0.55f, ice); c.drawPath(path, paint)
+        }
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = 1.3f * s
+        paint.color = argb(0.35f, mix(0xFF3A4A5C.toInt(), 0xFF7E93A8.toInt(), light))
+        for (k in 0 until 7) {
+            val xx = if (k < 4) w * (0.03f + k * 0.06f) else w * (0.74f + (k - 4) * 0.07f)
+            c.drawLine(xx, hz + 6 * s, xx + 18 * s, hz + 26 * s, paint)
+            c.drawLine(xx + 18 * s, hz + 26 * s, xx + 9 * s, hz + 40 * s, paint)
+        }
+        paint.style = Paint.Style.FILL
     }
 
     private fun decode(ctx: Context, res: Int): Bitmap =

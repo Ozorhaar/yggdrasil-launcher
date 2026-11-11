@@ -19,6 +19,8 @@ object Carved {
         HOME(R.raw.ygg_home),
         /** Someone's gone out: a short, low note on the war horn. */
         AWAY(R.raw.ygg_away),
+        /** The smith's anvil rings: a print is done. */
+        ANVIL(R.raw.ygg_anvil),
     }
 
     private var pool: SoundPool? = null

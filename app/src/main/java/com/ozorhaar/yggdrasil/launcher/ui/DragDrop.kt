@@ -47,6 +47,10 @@ class DragState {
     var startPage = 0
     var hover by mutableStateOf<Loc?>(null)
     var hoverInto by mutableStateOf(false)
+    /** The scene place a dragged app has rested over (Place name, or CAR); dropping puts it in that folder. */
+    var placeHover by mutableStateOf<String?>(null)
+    var placeCand: String? = null
+    var placeSince = 0L
 
     /** Set while a long-press on an icon owns the current touch, so other gestures stand down. */
     var ownedGesture = false
@@ -70,17 +74,17 @@ class DragState {
     fun beginWidget(id: Int, at: Offset, grabOffset: Offset, page: Int) {
         src = null; item = null; widgetId = id; grab = grabOffset
         pos = at; start = at; startPage = page
-        hover = null; hoverInto = false; widgetTarget = null; widgetTargetOk = false
+        hover = null; hoverInto = false; placeHover = null; placeCand = null; widgetTarget = null; widgetTargetOk = false
         active = true
     }
 
     fun begin(loc: Loc, what: String, at: Offset, page: Int) {
         src = loc; item = what; pos = at; start = at; startPage = page
-        hover = null; hoverInto = false; active = true
+        hover = null; hoverInto = false; placeHover = null; placeCand = null; active = true
     }
 
     fun reset() {
-        active = false; src = null; item = null; hover = null; hoverInto = false
+        active = false; src = null; item = null; hover = null; hoverInto = false; placeHover = null; placeCand = null
         widgetId = null; widgetTarget = null; widgetTargetOk = false
     }
 

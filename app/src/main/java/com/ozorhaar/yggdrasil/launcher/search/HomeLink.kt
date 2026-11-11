@@ -333,7 +333,8 @@ class HomeLink(context: Context) {
     fun glance(): com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House {
         val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
         var lights = false; var garage = false; var door = false; var hearth = false; var solar = 0f; var use = -1f
-        var leak = false; var fire = false; var forge = false
+        var leak = false; var fire = false; var forge = false; var printPct = -1
+        val personSource = HashMap<String, String>(); val speeds = HashMap<String, Double>()
         val darkLights = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.DARK_LIGHTS).toSet()
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
@@ -354,11 +355,56 @@ class HomeLink(context: Context) {
                 id in LEAKS && st == "on" -> leak = true
                 id == SMOKER -> fire = st !in setOf("off", "unavailable", "unknown", "")
                 id == PRINTER -> forge = st == "running" || st == "prepare" || st == "pause"
+                id == "sensor.yggdrasil_print_progress" -> printPct = st.toFloatOrNull()?.toInt() ?: -1
+                id.startsWith("person.") -> o.optJSONObject("attributes")?.optString("source")?.takeIf { it.isNotBlank() }?.let { personSource[id] = it }
+                id.startsWith("device_tracker.") -> o.optJSONObject("attributes")?.let { a -> if (a.has("speed")) speeds[id] = a.optDouble("speed", -1.0) }
             }
         }
         // sending power to the grid when the panels make more than the house uses (unknown use: no)
         val export = if (use >= 0f) solar - use else 0f
-        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar, export, leak, fire, forge)
+        // on the move: the person's phone reports more than ~9 mph (4 m/s); the first of the household is Freki, the second Geri
+        val keepers = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.PEOPLE)
+        val movers = buildSet {
+            keepers.forEachIndexed { i, pid ->
+                val sp = personSource[pid]?.let { speeds[it] } ?: -1.0
+                if (sp > 4.0 && i < 2) add(if (i == 0) "FREKI" else "GERI")
+            }
+        }
+        return com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.House(lights, garage, door, hearth, solar, export, leak, fire, forge,
+            printPct = if (forge) printPct else -1, movers = movers)
+    }
+
+    /** The steading at a glance, for the Saga card: who's home, the doors, the sun, the printer. */
+    data class SagaInfo(
+        val people: List<Pair<String, Boolean>>,
+        val doorUnlocked: Boolean?,
+        val garageOpen: Boolean?,
+        val solarW: Float,
+        val solarTodayKwh: Float?,
+        val printPct: Int,
+    )
+
+    /** Blocking. */
+    fun sagaInfo(): SagaInfo {
+        val arr = JSONArray(request(url, token(), "GET", "/api/states", null))
+        val byId = HashMap<String, JSONObject>()
+        for (i in 0 until arr.length()) arr.getJSONObject(i).let { byId[it.optString("entity_id")] = it }
+        val inHome = byId["zone.home"]?.optJSONObject("attributes")?.optJSONArray("persons")
+            ?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() } ?: emptySet()
+        val people = cfgIds(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.PEOPLE).map { pid ->
+            val o = byId[pid]
+            val name = if (pid.endsWith("ozorhaar")) "Jason" else o?.optJSONObject("attributes")?.optString("friendly_name")?.takeIf { it.isNotBlank() } ?: pid.substringAfter('.')
+            name to (pid in inHome || o?.optString("state") == "home")
+        }
+        val door = byId[Gate.SIDE_DOOR.entityId]?.optString("state")?.let { it == "unlocked" || it == "open" }
+        val garage = byId[Gate.GARAGE.entityId]?.optString("state")?.let { it == "open" || it == "opening" }
+        val printing = byId[PRINTER]?.optString("state")?.let { it == "running" || it == "prepare" || it == "pause" } == true
+        return SagaInfo(
+            people, door, garage,
+            byId[SOLAR]?.optString("state")?.toFloatOrNull()?.coerceAtLeast(0f) ?: 0f,
+            byId[SOLAR_TODAY]?.optString("state")?.toFloatOrNull(),
+            if (printing) byId["sensor.yggdrasil_print_progress"]?.optString("state")?.toFloatOrNull()?.toInt() ?: 0 else -1,
+        )
     }
 
     /** Secures ([open] = false: lock/close) or opens ([open] = true: unlock/open) one of the two doors. Blocking. */

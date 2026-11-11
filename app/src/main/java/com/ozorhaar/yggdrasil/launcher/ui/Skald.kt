@@ -249,3 +249,10 @@ private fun Control(g: Glyph, big: Boolean = false, onClick: () -> Unit) {
         }
     }
 }
+
+
+/** Whether any music app is playing right now: the Saga turns to the Skald. */
+internal fun skaldPlaying(ctx: Context): Boolean = runCatching {
+    val msm = ctx.getSystemService(MediaSessionManager::class.java)
+    msm.getActiveSessions(ComponentName(ctx, BadgeService::class.java)).any { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+}.getOrDefault(false)

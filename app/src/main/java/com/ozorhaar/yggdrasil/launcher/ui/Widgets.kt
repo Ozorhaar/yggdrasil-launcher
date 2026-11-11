@@ -451,15 +451,39 @@ object SagaCard {
 fun SagaCardView() {
     val ctx = LocalContext.current
     val prefs = remember { ctx.getSharedPreferences("ygg_saga", android.content.Context.MODE_PRIVATE) }
-    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = prefs.getInt("page", 0).coerceIn(0, 2)) { 3 }
+    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = prefs.getInt("page", 0).coerceIn(0, 3)) { 4 }
     androidx.compose.runtime.LaunchedEffect(state.currentPage) { prefs.edit().putInt("page", state.currentPage).apply() }
+    // it turns by itself to what matters: a storm warning (the Sky), an event within the hour (the
+    // Norns), music playing (the Skald); never within five minutes of your own swipe
+    var userAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var turning by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(state.isScrollInProgress) { if (state.isScrollInProgress && !turning) userAt = System.currentTimeMillis() }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            val want = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                when {
+                    com.ozorhaar.yggdrasil.launcher.weather.Weather.alerts(ctx).any { it.event.contains("Warning", ignoreCase = true) } -> 2
+                    nornsSoon(ctx, 60 * 60_000L) -> 1
+                    skaldPlaying(ctx) -> 0
+                    else -> null
+                }
+            }
+            if (want != null && want != state.currentPage && System.currentTimeMillis() - userAt > 5 * 60_000L) {
+                turning = true
+                runCatching { state.animateScrollToPage(want) }
+                turning = false
+            }
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
             Box(Modifier.fillMaxSize()) {
                 when (p) {
                     0 -> SkaldCard()
                     1 -> NornsCardView()
-                    else -> SkyCardView()
+                    2 -> SkyCardView()
+                    else -> SteadingCardView()
                 }
             }
         }
@@ -467,12 +491,55 @@ fun SagaCardView() {
             Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            repeat(3) { i ->
+            repeat(4) { i ->
                 Box(
                     Modifier.size(6.dp).background(
                         if (i == state.currentPage) Ygg.Gold else Ygg.Gold.copy(alpha = 0.3f),
                         androidx.compose.foundation.shape.CircleShape,
                     )
+                )
+            }
+        }
+    }
+}
+
+
+/** The Saga's fourth page: the steading at a glance (who's home, the doors, the sun, the printer). Tap: Home Assistant. */
+@Composable
+fun SteadingCardView() {
+    val ctx = LocalContext.current
+    val link = ctx.ygg.homeLink
+    var info by remember { mutableStateOf<com.ozorhaar.yggdrasil.launcher.search.HomeLink.SagaInfo?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            if (link.configured) info = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { link.sagaInfo() }.getOrNull() } ?: info
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
+    val shape = CutCornerShape(14.dp)
+    Column(
+        Modifier.fillMaxSize()
+            .background(Ygg.Night.copy(alpha = 0.92f), shape)
+            .border(1.5.dp, Ygg.Gold.copy(alpha = 0.7f), shape)
+            .clickable { ctx.openHomeAssistant() }
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        val i = info
+        when {
+            !link.configured -> RuneText("Connect Home Assistant in settings", 14.sp, Ygg.Ash)
+            i == null -> RuneText("Reading the steading…", 14.sp, Ygg.Ash)
+            else -> {
+                RuneText("Home: " + i.people.joinToString(" · ") { (n, home) -> if (home) n else "$n away" }, 15.sp, Ygg.Gold)
+                val doors = listOfNotNull(
+                    i.doorUnlocked?.let { if (it) "Side door unlocked" else "Side door locked" },
+                    i.garageOpen?.let { if (it) "garage open" else "garage closed" },
+                ).joinToString(" · ")
+                if (doors.isNotEmpty()) RuneText(doors, 13.sp, if (i.doorUnlocked == true || i.garageOpen == true) Ygg.Ember else Ygg.Frost)
+                val sun = if (i.solarW >= 1000f) "%.1f kW".format(i.solarW / 1000f) else "${i.solarW.toInt()} W"
+                RuneText(
+                    "Sun $sun" + (i.solarTodayKwh?.let { " · %.1f kWh today".format(it) } ?: "") + (if (i.printPct >= 0) " · printing ${i.printPct}%" else ""),
+                    13.sp, Ygg.Bone,
                 )
             }
         }
