@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 
 /**
@@ -91,49 +92,78 @@ fun HeimdallGem(color: androidx.compose.ui.graphics.Color, modifier: Modifier = 
 
 // ------------------------------------------------------------------ the marks at the foot of the band
 
-/** Under Huginn: voicemail, the old tape sign (two reels and the tape between); ember while a message waits. */
+/**
+ * Under Huginn: voicemail, as a rune-stick: the whittled stick Norse folk carved a message on and
+ * left for someone (fehu, uruz and naudiz cut into it). Ember while a message waits.
+ */
 @Composable
 fun VoicemailGem(waiting: Boolean, modifier: Modifier = Modifier) = DockGem(modifier) {
     val c = if (waiting) Ygg.Ember else Ygg.Frost
-    val w = 1.8.dp.toPx()
-    val r = size.height * 0.27f
-    val cy = size.height * 0.46f
-    val lx = size.width * 0.5f - r * 1.75f; val rx = size.width * 0.5f + r * 1.75f
-    drawCircle(c, r, Offset(lx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-    drawCircle(c, r, Offset(rx, cy), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-    drawLine(c, Offset(lx, cy + r), Offset(rx, cy + r), w, StrokeCap.Round)
+    val w = size.width; val h = size.height
+    val stick = androidx.compose.ui.graphics.Path().apply {
+        moveTo(w * 0.04f, h * 0.40f); lineTo(w * 0.80f, h * 0.30f); lineTo(w * 0.97f, h * 0.52f)
+        lineTo(w * 0.80f, h * 0.72f); lineTo(w * 0.04f, h * 0.64f); close()
+    }
+    drawPath(stick, c)
+    val cut = 1.3.dp.toPx()
+    fun l(x1: Float, y1: Float, x2: Float, y2: Float) =
+        drawLine(Ygg.Night, Offset(w * x1, h * y1), Offset(w * x2, h * y2), cut, StrokeCap.Round)
+    l(0.18f, 0.62f, 0.18f, 0.40f); l(0.18f, 0.44f, 0.25f, 0.38f); l(0.18f, 0.52f, 0.25f, 0.46f)   // fehu
+    l(0.36f, 0.62f, 0.36f, 0.38f); l(0.36f, 0.38f, 0.45f, 0.46f); l(0.45f, 0.46f, 0.45f, 0.62f)   // uruz
+    l(0.58f, 0.62f, 0.58f, 0.36f); l(0.53f, 0.44f, 0.63f, 0.54f)                                    // naudiz
 }
 
-/** Under Mimir: the camera, as the eye Odin gave to Mimir's well. */
+/** Under Mimir: the camera, as a holed "Odin stone", the kind you look through to see what's hidden. */
 @Composable
 fun EyeGem(modifier: Modifier = Modifier) = DockGem(modifier) {
     val c = Ygg.Frost
-    val w = 1.7.dp.toPx()
-    val cx = size.width / 2; val cy = size.height / 2
-    val hw = size.width * 0.40f; val hh = size.height * 0.42f
-    val lid = androidx.compose.ui.graphics.Path().apply {
-        moveTo(cx - hw, cy)
-        quadraticTo(cx, cy - hh * 2, cx + hw, cy)
-        quadraticTo(cx, cy + hh * 2, cx - hw, cy)
+    val w = size.width; val h = size.height
+    val cx = w / 2; val cy = h / 2
+    val sw = 1.6.dp.toPx()
+    val pts = floatArrayOf(-0.30f, 0.40f, -0.34f, 0.02f, -0.24f, -0.34f, -0.02f, -0.46f, 0.20f, -0.40f, 0.32f, -0.10f, 0.30f, 0.26f, 0.14f, 0.44f)
+    val stone = androidx.compose.ui.graphics.Path().apply {
+        for (i in pts.indices step 2) {
+            val x = cx + pts[i] * w; val y = cy + pts[i + 1] * h * 1.05f
+            if (i == 0) moveTo(x, y) else lineTo(x, y)
+        }
         close()
     }
-    drawPath(lid, c, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = StrokeCap.Round))
-    drawCircle(c, hh * 0.55f, Offset(cx, cy))
+    drawPath(stone, c, style = androidx.compose.ui.graphics.drawscope.Stroke(sw, join = androidx.compose.ui.graphics.StrokeJoin.Round))
+    val hx = cx - w * 0.03f; val hy = cy - h * 0.04f
+    rotate(17f, Offset(hx, hy)) {
+        drawOval(c, Offset(hx - h * 0.15f, hy - h * 0.13f), androidx.compose.ui.geometry.Size(h * 0.30f, h * 0.26f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(sw))
+    }
+    drawLine(c, Offset(cx + w * 0.12f, cy + h * 0.22f), Offset(cx + w * 0.20f, cy + h * 0.10f), 1.dp.toPx(), StrokeCap.Round)
 }
 
-/** Under Muninn (Memory): the gallery, a framed picture of peaks under the sun. */
+/** Under Muninn (Memory): the gallery, as a Gotland picture stone: a sun-whirl above a ship. */
 @Composable
 fun GalleryGem(modifier: Modifier = Modifier) = DockGem(modifier) {
     val c = Ygg.Frost
-    val w = 1.6.dp.toPx()
-    val wd = size.width; val h = size.height
-    drawRect(c, Offset(wd * 0.2f, h * 0.06f), androidx.compose.ui.geometry.Size(wd * 0.6f, h * 0.88f), style = androidx.compose.ui.graphics.drawscope.Stroke(w))
-    val peaks = androidx.compose.ui.graphics.Path().apply {
-        moveTo(wd * 0.24f, h * 0.84f); lineTo(wd * 0.42f, h * 0.42f); lineTo(wd * 0.54f, h * 0.66f)
-        lineTo(wd * 0.64f, h * 0.52f); lineTo(wd * 0.76f, h * 0.84f)
+    val w = size.width; val h = size.height
+    val stone = androidx.compose.ui.graphics.Path().apply {
+        moveTo(w * 0.27f, h); lineTo(w * 0.29f, h * 0.40f)
+        cubicTo(w * 0.30f, h * -0.08f, w * 0.70f, h * -0.08f, w * 0.71f, h * 0.40f); lineTo(w * 0.73f, h)
     }
-    drawPath(peaks, c, style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = StrokeCap.Round))
-    drawCircle(c, h * 0.09f, Offset(wd * 0.66f, h * 0.28f))
+    drawPath(stone, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+    val r = h * 0.09f
+    drawArc(c, 17f, 292f, false, Offset(w * 0.5f - r, h * 0.22f - r), androidx.compose.ui.geometry.Size(r * 2, r * 2),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(1.1.dp.toPx(), cap = StrokeCap.Round))
+    // the ship: a broad checked sail over a hull with curled stems
+    drawRect(c, Offset(w * 0.395f, h * 0.40f), androidx.compose.ui.geometry.Size(w * 0.21f, h * 0.27f))
+    val lw = 0.7.dp.toPx()
+    drawLine(Ygg.Night, Offset(w * 0.395f, h * 0.40f), Offset(w * 0.605f, h * 0.67f), lw)
+    drawLine(Ygg.Night, Offset(w * 0.605f, h * 0.40f), Offset(w * 0.395f, h * 0.67f), lw)
+    val hull = androidx.compose.ui.graphics.Path().apply {
+        moveTo(w * 0.34f, h * 0.66f); quadraticTo(w * 0.36f, h * 0.80f, w * 0.5f, h * 0.80f); quadraticTo(w * 0.64f, h * 0.80f, w * 0.66f, h * 0.66f)
+    }
+    drawPath(hull, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.4.dp.toPx(), cap = StrokeCap.Round))
+    val stems = androidx.compose.ui.graphics.Path().apply {
+        moveTo(w * 0.34f, h * 0.66f); quadraticTo(w * 0.33f, h * 0.58f, w * 0.37f, h * 0.60f)
+        moveTo(w * 0.66f, h * 0.66f); quadraticTo(w * 0.67f, h * 0.58f, w * 0.63f, h * 0.60f)
+    }
+    drawPath(stems, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.1.dp.toPx(), cap = StrokeCap.Round))
 }
 
 /** Under Brave's helm: a round shield, for Proton Pass (hold it for Proton Authenticator). */
