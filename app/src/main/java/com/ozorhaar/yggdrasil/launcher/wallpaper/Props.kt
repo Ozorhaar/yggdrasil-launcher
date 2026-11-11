@@ -58,16 +58,45 @@ internal class Props {
         path.lineTo(x - r, y); path.lineTo(x - r * 0.25f, y - r * 0.25f); path.close()
         fill(argb(a, 0xFFF4D6)); c.drawPath(path, p)
     }
+    /** Sparks rising from x, y: n of them, each living [life] ms and climbing [rise]. */
+    fun sparks(c: Canvas, x: Float, y: Float, n: Int, life: Float, rise: Float) {
+        for (i in 0 until n) {
+            val age = ((t + i * life / n) % life) / life
+            val sx = x + sin(i * 2.3f + age * 5f) * 8f + (i % 3 - 1) * age * 12f
+            fill(argb((1 - age) * 0.95f, if (i % 2 == 0) GOLD else EMBER))
+            c.drawCircle(sx, y - age * rise, (1.8f - age) * 1.2f + 0.3f, p)
+        }
+    }
+
+    /** A four-pointed glint (for frost on the World Tree). */
+    fun glint(c: Canvas, x: Float, y: Float, r: Float, a: Float, col: Int = FROST) {
+        path.reset(); path.moveTo(x, y - r); path.lineTo(x + r * 0.25f, y - r * 0.25f); path.lineTo(x + r, y)
+        path.lineTo(x + r * 0.25f, y + r * 0.25f); path.lineTo(x, y + r); path.lineTo(x - r * 0.25f, y + r * 0.25f)
+        path.lineTo(x - r, y); path.lineTo(x - r * 0.25f, y - r * 0.25f); path.close()
+        fill(argb(a, col)); c.drawPath(path, p)
+    }
+
+    /** A soft light at x, y (for the shields' gleam). */
+    fun gleam(c: Canvas, x: Float, y: Float, rx: Float, ry: Float, a: Float) {
+        p.style = Paint.Style.FILL
+        p.shader = RadialGradient(0f, 0f, 1f, intArrayOf(argb(a, 0xFFF4D6), 0), null, Shader.TileMode.CLAMP)
+        c.save(); c.translate(x, y); c.scale(rx, ry); c.drawCircle(0f, 0f, 1f, p); c.restore()
+        p.shader = null
+    }
+
     private fun stones(c: Canvas, cx: Float, gap: Float, r: Float) {
         fill(rock); for (k in -2..2) c.drawCircle(cx + k * gap, 0f, r, p)
     }
 
     /** Personal: a carved runestone on the ridge, its serpent band catching the light. */
-    fun runestone(c: Canvas) {
+    fun runestone(c: Canvas, stir: Boolean = false) {
+        val pulse = 0.5f + 0.5f * sin(t * 0.004f)
+        if (stir) glow(c, 0f, -50f, 64f, 0.18f + 0.22f * pulse)
         path.reset(); path.moveTo(-22f, 2f); path.lineTo(-26f, -58f); path.quadTo(-24f, -92f, 0f, -100f)
         path.quadTo(24f, -95f, 26f, -60f); path.lineTo(22f, 2f); path.close()
         fill(rock); c.drawPath(path, p)
-        stroke(argb(0.35f + 0.35f * dark, GOLD), 2.6f)
+        // something waits: the runes burn ember and slowly pulse
+        stroke(if (stir) argb(0.6f + 0.4f * pulse, EMBER) else argb(0.35f + 0.35f * dark, GOLD), 2.6f)
         path.reset(); path.moveTo(-14f, -4f); path.lineTo(-17f, -56f); path.quadTo(-16f, -82f, 0f, -88f)
         path.quadTo(16f, -84f, 17f, -58f); path.lineTo(14f, -10f); path.quadTo(10f, -2f, 4f, -8f)
         c.drawPath(path, p)
@@ -78,7 +107,7 @@ internal class Props {
     }
 
     /** Finance: a cave in the mountain's face, a dragon's gold heaped inside, glinting. */
-    fun cave(c: Canvas) {
+    fun cave(c: Canvas, stir: Boolean = false) {
         path.reset(); path.moveTo(-64f, 0f); path.quadTo(-62f, -72f, 0f, -84f); path.quadTo(60f, -74f, 66f, 0f); path.close()
         fill(mix(0x030406, 0x14131a, light)); c.drawPath(path, p)
         stroke(rock, 7f)
@@ -103,13 +132,20 @@ internal class Props {
         for (g in arrayOf(floatArrayOf(-22f, -20f, 0f), floatArrayOf(8f, -30f, 1.7f), floatArrayOf(28f, -16f, 3.1f), floatArrayOf(-38f, -6f, 4.4f))) {
             val a = max(0f, sin(t * 0.002f + g[2])); if (a > 0.05f) star(c, g[0], g[1], 5 * a + 1, 0.9f * a)
         }
+        // something waits: the dragon wakes, two eyes open in the dark above its gold, blinking now and then
+        if (stir && (t % 5200f) > 220f) for (ex in floatArrayOf(-13f, 13f)) {
+            glow(c, ex, -60f, 11f, 0.55f, GOLD)
+            fill(argb(0.95f, 0xFFE08A)); rf.set(ex - 5.5f, -62.6f, ex + 5.5f, -57.4f); c.drawOval(rf, p)
+            fill(0xFF14100A.toInt()); c.drawRect(ex - 0.9f, -62.2f, ex + 0.9f, -57.8f, p)
+        }
     }
 
     /** Video: a skald by a little fire on the shore, his lyre on his knee. */
-    fun skald(c: Canvas) {
-        glow(c, 22f, -10f, 58f, 0.25f + 0.45f * dark)
+    fun skald(c: Canvas, stir: Boolean = false) {
+        glow(c, 22f, -10f, if (stir) 80f else 58f, 0.25f + 0.45f * dark + (if (stir) 0.15f else 0f))
         stones(c, 22f, 6f, 3.4f)
-        flames(c, 22f, -1f, 5.5f, 16f)
+        flames(c, 22f, -1f, 5.5f, if (stir) 28f else 16f)
+        if (stir) sparks(c, 22f, -18f, 8, 2200f, 80f)              // something waits: the fire flares and throws sparks
         fill(darkC)
         path.reset(); path.moveTo(-26f, 0f); path.quadTo(-30f, -22f, -20f, -34f); path.quadTo(-12f, -44f, -6f, -36f)
         path.quadTo(-2f, -24f, 2f, -14f); path.lineTo(6f, 0f); path.close(); c.drawPath(path, p)
@@ -124,7 +160,7 @@ internal class Props {
 
     /** Work: a smithy on a ledge of the slope, its forge glowing through the door, an anvil outside.
      *  While the printer works, sparks fly from its chimney. */
-    fun smithy(c: Canvas) {
+    fun smithy(c: Canvas, stir: Boolean = false) {
         path.reset(); path.moveTo(-100f, 2f); path.lineTo(96f, 2f); path.lineTo(84f, 16f); path.quadTo(0f, 26f, -88f, 14f); path.close()
         fill(rock); c.drawPath(path, p)
         fill(mix(0x141820, 0x5a5658, light)); c.drawRect(-52f, -42f, 52f, 2f, p)
@@ -138,6 +174,20 @@ internal class Props {
         fill(mix(0x07080b, 0x26262a, light)); c.drawRect(-82f, -10f, -72f, 2f, p)
         path.reset(); path.moveTo(-92f, -10f); path.lineTo(-62f, -10f); path.quadTo(-58f, -15f, -64f, -18f); path.lineTo(-90f, -18f); path.close()
         c.drawPath(path, p)
+        // something waits: the hammer rings on the anvil, a burst of sparks every few seconds
+        if (stir) {
+            val ph = (t % 2400f) / 2400f
+            if (ph < 0.32f) {
+                val k = ph / 0.32f
+                glow(c, -77f, -18f, 26f, 0.6f * (1 - k), GOLD)
+                for (i in 0 until 12) {
+                    val a = (-PI.toFloat() / 2) + (i - 5.5f) * 0.2f
+                    val r = 6f + k * (24f + (i % 4) * 6f)
+                    fill(argb(1 - k, if (i % 2 == 0) GOLD else EMBER))
+                    c.drawCircle(-77f + kotlin.math.cos(a) * r, -18f + sin(a) * r + k * k * 10f, 1.6f * (1 - k) + 0.4f, p)
+                }
+            }
+        }
         if (forge) for (i in 0 until 10) {
             val life = 1600f; val age = ((t + i * 397f) % life) / life
             val sx = 37f + sin(i * 2.3f + age * 5f) * 10f + (i % 3 - 1) * age * 14f; val sy = -90f - age * 70f
@@ -146,7 +196,7 @@ internal class Props {
     }
 
     /** Food: a cookfire on the shore with a cauldron hung from a tripod, steam rising. */
-    fun cookfire(c: Canvas) {
+    fun cookfire(c: Canvas, stir: Boolean = false) {
         glow(c, 0f, -10f, 56f, 0.25f + 0.45f * dark)
         stones(c, 0f, 7f, 3.6f)
         flames(c, 0f, -1f, 6f, 14f)
@@ -156,13 +206,20 @@ internal class Props {
         path.reset(); path.moveTo(-19f, -44f); path.lineTo(19f, -44f); path.quadTo(21f, -16f, 0f, -14f); path.quadTo(-21f, -16f, -19f, -44f); path.close()
         fill(mix(0x07080b, 0x2a2a2e, light)); c.drawPath(path, p)
         stroke(mix(0x2a2a2e, 0x7a7670, light), 2.5f); c.drawLine(-21f, -44f, 21f, -44f, p)
-        for (i in 0 until 4) {
-            val life = 3200f; val age = ((t + i * 800f) % life) / life
-            fill(argb(0.22f * (1 - age), 0xE8ECF2)); c.drawCircle(sin(age * 4 + i) * 6, -48f - age * 46f, 4 + age * 9, p)
+        // steam; something waits: the cauldron boils over, steam pouring up
+        val puffs = if (stir) 9 else 4; val life = if (stir) 2000f else 3200f
+        for (i in 0 until puffs) {
+            val age = ((t + i * life / puffs) % life) / life
+            fill(argb((if (stir) 0.32f else 0.22f) * (1 - age), 0xE8ECF2))
+            c.drawCircle(sin(age * 4 + i) * (if (stir) 10 else 6), -48f - age * (if (stir) 70f else 46f), (if (stir) 5f else 4f) + age * (if (stir) 13f else 9f), p)
+        }
+        if (stir) for (i in 0 until 4) {
+            val ph = ((t * 0.003f + i * 1.7f) % 1f + 1f) % 1f
+            fill(argb(0.7f * (1 - ph), 0xBFD3E6)); c.drawCircle(-12f + i * 8f, -45f - ph * 7f, 1.6f, p)
         }
     }
 
-    private fun knarrShape(c: Canvas) {
+    private fun knarrShape(c: Canvas, lantern: Boolean) {
         stroke(darkC, 4f); c.drawLine(0f, -12f, 0f, -150f, p)
         p.strokeWidth = 5f; c.drawLine(-62f, -142f, 62f, -142f, p)
         p.strokeWidth = 1.6f; c.drawLines(floatArrayOf(0f, -150f, -112f, -30f, 0f, -150f, 112f, -30f), p)
@@ -176,15 +233,21 @@ internal class Props {
         fill(darkC); c.drawPath(path, p)
         stroke(argb(0.25f + 0.2f * light, GOLD), 1.6f)
         path.reset(); path.moveTo(-98f, -8f); path.quadTo(0f, 2f, 98f, -8f); c.drawPath(path, p)
+        if (lantern) {
+            val fl = 0.8f + 0.2f * sin(t * 0.011f) * sin(t * 0.0067f + 1f)
+            stroke(darkC, 2f); c.drawLine(110f, -36f, 110f, -58f, p)
+            glow(c, 110f, -62f, 34f, (0.45f + 0.3f * dark) * fl, GOLD)
+            fill(argb(0.95f * fl, GOLD)); rf.set(106f, -67f, 114f, -57f); c.drawRoundRect(rf, 2f, 2f, p)
+        }
     }
 
     /** Shop: a knarr, the broad-bellied trader, riding at anchor with bales on deck, and its reflection. */
-    fun knarr(c: Canvas) {
+    fun knarr(c: Canvas, stir: Boolean = false) {
         val bob = sin(t * 0.0015f) * 3f; val roll = sin(t * 0.0011f) * 0.012f * 180f / PI.toFloat()
         val layer = c.saveLayerAlpha(-140f, -20f, 140f, 170f, (255 * 0.28f).toInt())
-        c.scale(1f, -1f); c.translate(0f, -bob); c.rotate(-roll); knarrShape(c)
+        c.scale(1f, -1f); c.translate(0f, -bob); c.rotate(-roll); knarrShape(c, stir)
         c.restoreToCount(layer)
-        c.save(); c.translate(0f, bob); c.rotate(roll); knarrShape(c); c.restore()
+        c.save(); c.translate(0f, bob); c.rotate(roll); knarrShape(c, stir); c.restore()
         stroke(argb(0.18f, 0xDDE6F5), 1.5f); c.drawLines(floatArrayOf(-120f, 6f, -90f, 6f, 92f, 6f, 124f, 6f), p)
     }
 

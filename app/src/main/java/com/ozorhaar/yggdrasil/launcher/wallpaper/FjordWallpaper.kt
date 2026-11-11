@@ -57,6 +57,8 @@ class FjordWallpaper : WallpaperService() {
                 if (System.currentTimeMillis() - start < DEMO_SECONDS * 1000) sc.demoStart = start
             }
             prefs.registerOnSharedPreferenceChangeListener(demoListener)
+            // the home screen stirs a place when its folder gets something: draw now, not at the next tick
+            FjordScene.wake = { handler.post { drawFrame() } }
             notifyColorsChanged()
         }
 

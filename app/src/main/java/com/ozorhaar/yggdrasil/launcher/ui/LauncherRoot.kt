@@ -792,6 +792,14 @@ fun LauncherRoot() {
             val revealing = revealUntil > 0L
             fun count(f: com.ozorhaar.yggdrasil.launcher.data.Folder?) =
                 f?.apps?.sumOf { key -> byKey[key]?.let { badges[it.packageName] } ?: 0 } ?: 0
+            // tell the wallpaper which places stir (their folders have something waiting)
+            val stir = buildSet {
+                if (places) for (pl in com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.entries)
+                    if (count(cfgFolder(placeEntity(pl))) > 0) add(pl.name)
+                if (count(cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_CAR)) > 0) add("CAR")
+                if (count(cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SMART_HOME)) > 0) add("SMART_HOME")
+            }
+            androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.stirring = stir }
             SceneMarks(revealing) {
                 val w = rootSize[0]; val h = rootSize[1]; val x = wallX()
                 val out = ArrayList<SceneMark>()
@@ -2053,8 +2061,8 @@ private fun placeEntity(pl: com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene
 private class SceneMark(val r: android.graphics.RectF, val label: String, val count: Int)
 
 /**
- * Over the wallpaper, under the icons: an ember count by each place with unread messages waiting,
- * and while [revealing], a gold outline round every place with what it opens.
+ * Over the wallpaper, under the icons: while [revealing], a gold outline round every place with
+ * what it opens. (A place whose folder has something waiting stirs in the wallpaper itself.)
  */
 @Composable
 private fun SceneMarks(revealing: Boolean, marks: () -> List<SceneMark>) {
@@ -2079,17 +2087,6 @@ private fun SceneMarks(revealing: Boolean, marks: () -> List<SceneMark>) {
             pen.style = android.graphics.Paint.Style.FILL; pen.color = android.graphics.Color.argb((200 * fade).toInt(), 0x0B, 0x0E, 0x15)
             nc.drawRoundRect(tx - 5f * dp, ty - 13f * dp, tx + tw + 5f * dp, ty + 4f * dp, 6f * dp, 6f * dp, pen)
             nc.drawText(m.label, tx, ty, text)
-        }
-        for (m in list) if (m.count > 0) {
-            val r = 10f * dp
-            val cx = m.r.right - r; val cy = m.r.top + r
-            pen.style = android.graphics.Paint.Style.FILL; pen.color = 0xFFE0703A.toInt()
-            nc.drawCircle(cx, cy, r, pen)
-            pen.style = android.graphics.Paint.Style.STROKE; pen.strokeWidth = 1.5f * dp; pen.color = 0xFF0B0E15.toInt()
-            nc.drawCircle(cx, cy, r, pen)
-            val n = if (m.count > 99) "99" else m.count.toString()
-            text.textSize = 12f * dp; text.color = 0xFF0B0E15.toInt()
-            nc.drawText(n, cx - text.measureText(n) / 2, cy + 4.2f * dp, text)
         }
     }
 }

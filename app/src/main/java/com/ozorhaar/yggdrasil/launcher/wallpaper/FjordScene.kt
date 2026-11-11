@@ -75,6 +75,16 @@ class FjordScene(ctx: Context) {
     private var feast = false
 
     companion object {
+        /** Wakes the wallpaper to draw now (set by its engine). */
+        @Volatile var wake: (() -> Unit)? = null
+
+        /**
+         * The places whose folders have something waiting (Place names, and CAR, SMART_HOME); the
+         * home screen sets it, and each stirs in its own way until they're read.
+         */
+        @Volatile var stirring: Set<String> = emptySet()
+            set(v) { if (v != field) { field = v; wake?.invoke() } }
+
         /** Whether the longship is in its bay (not sailed out of the fjord); the scene writes it each frame. */
         @Volatile var shipHome = true
 
@@ -468,6 +478,17 @@ class FjordScene(ctx: Context) {
                 paint.blendMode = null
             }
             paint.colorFilter = null; paint.alpha = 255
+            // something waits in Network: frost glints drift along the crown's branch tips
+            if (showPlaces && Place.NETWORK.name in stirring) {
+                props.t = t
+                for (i in 0 until 16) {
+                    val fx = ((i * 0.618034f) % 1f); val fy = ((i * 0.381966f + 0.13f) % 1f)
+                    val gx = rect.left + rect.width() * (0.12f + 0.76f * fx) + sin(t * 0.0006f + i) * 6 * s
+                    val gy = rect.top + rect.height() * (0.06f + 0.42f * fy)
+                    val a = max(0f, sin(t * 0.0026f + i * 1.9f))
+                    if (a > 0.05f) props.glint(c, gx, gy, (3f + 5f * a) * s, 0.85f * a)
+                }
+            }
         }
 
         // clouds
@@ -635,6 +656,11 @@ class FjordScene(ctx: Context) {
             paint.colorFilter = null; paint.alpha = 255
             if (rowing) drawOars(c, shipL, shipT, s, t, fade, p.dark)
             if (feast) dressShip(c, shipL, shipT, s, t, fade)
+            // something waits in Car: a gleam runs along the shields
+            if (showPlaces && "CAR" in stirring) {
+                val ph = (t % 2600f) / 2600f
+                props.gleam(c, shipL + (300f + ph * 560f) * 1.04f * s, shipT + 336f * s, 46f * s, 18f * s, 0.55f * fade * sin(ph * PI.toFloat()))
+            }
             paint.colorFilter = null; paint.alpha = 255
             val sm = sail
             if (sun > 0.02f && sm != null) {
@@ -659,10 +685,11 @@ class FjordScene(ctx: Context) {
         val busy = (house?.leak == true && showLeak) || (house?.fire == true && showFire) || (house?.forge == true && showForge)
         frameMs = when {
             animating || sailing -> 66L
-            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy -> 125L
+            smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy || (showPlaces && stirring.isNotEmpty()) -> 125L
             else -> 60_000L
         }
-        animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy
+        animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy ||
+            (showPlaces && stirring.isNotEmpty())
         if (fireworks) { animating = true; frameMs = 66L }
         house = realHouse
     }
@@ -804,6 +831,14 @@ class FjordScene(ctx: Context) {
             path.close()
             c.drawPath(path, paint)
             c.drawRect(x(SHELF_FROM + 30f), base - 3 * s, landX + 1440 * k, base + 3 * s, paint)
+        }
+
+        // something waits in Smart Home: sparks rise from the smoke hole
+        if (showPlaces && "SMART_HOME" in stirring) {
+            props.t = t
+            c.save(); c.translate(mid + 40 * s, ridge + 2 * s); c.scale(s, s)
+            props.sparks(c, 0f, 0f, 9, 2000f, 70f)
+            c.restore()
         }
 
         // the hearth: while Jason or Leah is home, embers glow in the smoke hole and smoke rises
@@ -1199,18 +1234,20 @@ class FjordScene(ctx: Context) {
     private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {
         props.light = light; props.dark = dark; props.t = t
         props.forge = house?.forge == true && showForge
+        val st = stirring
         for (pl in Place.entries) {
             if (pl.sky) continue
+            val stir = pl.name in st
             c.save()
             c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s)
             if (pl == Place.SHOP) c.scale(s * 0.85f, s * 0.85f) else c.scale(s, s)
             when (pl) {
-                Place.PERSONAL -> props.runestone(c)
-                Place.FINANCE -> props.cave(c)
-                Place.VIDEO -> props.skald(c)
-                Place.WORK -> props.smithy(c)
-                Place.FOOD -> props.cookfire(c)
-                Place.SHOP -> props.knarr(c)
+                Place.PERSONAL -> props.runestone(c, stir)
+                Place.FINANCE -> props.cave(c, stir)
+                Place.VIDEO -> props.skald(c, stir)
+                Place.WORK -> props.smithy(c, stir)
+                Place.FOOD -> props.cookfire(c, stir)
+                Place.SHOP -> props.knarr(c, stir)
                 Place.NETWORK -> Unit
             }
             c.restore()
