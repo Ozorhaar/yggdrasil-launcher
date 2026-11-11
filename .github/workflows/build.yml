@@ -40,8 +40,8 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon --stacktrace
       - name: Rename APK and checksum
         run: |
-          # 2.0.0 was CI run 87; versions count up from it (the same rule as app/build.gradle.kts)
-          V="2.0.$(( ${{ github.run_number }} - 87 ))"
+          # 2.0.0 was CI run 88; versions count up from it (the same rule as app/build.gradle.kts)
+          V="2.0.$(( ${{ github.run_number }} - 88 ))"
           echo "YGG_VERSION=$V" >> "$GITHUB_ENV"
           A="YggdrasilLauncher-$V.apk"
           cp app/build/outputs/apk/release/app-release.apk "$A"

@@ -39,12 +39,12 @@ object Updater {
     /** The newest release on GitHub. Call off the main thread. */
     fun latest(): Release {
         val j = JSONObject(get(API).decodeToString())
-        val tag = j.getString("tag_name")                       // v1.0.N (build N), or v2.0.P (build 87 + P)
+        val tag = j.getString("tag_name")                       // v1.0.N (build N), or v2.0.P (build 88 + P)
         val parts = tag.removePrefix("v").split('.')
         val last = parts.lastOrNull()?.toLongOrNull() ?: error("Unexpected release tag $tag")
         val code = when (parts.firstOrNull()) {
             "1" -> last
-            "2" -> 87 + last                                    // 2.0.0 was CI run 87 (see app/build.gradle.kts)
+            "2" -> 88 + last                                    // 2.0.0 was CI run 88 (see app/build.gradle.kts)
             else -> error("Unexpected release tag $tag")
         }
         val assets = j.getJSONArray("assets")
