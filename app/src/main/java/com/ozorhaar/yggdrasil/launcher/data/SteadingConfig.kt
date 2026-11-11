@@ -46,6 +46,8 @@ object SteadingConfig {
         F_WORK("place_work", "Folder the smithy opens", "Work"),
         F_FOOD("place_food", "Folder the cookfire opens", "Food"),
         F_SHOP("place_shop", "Folder the knarr opens", "Shop"),
+        F_MAIL("place_mail", "Folder Ratatoskr opens", "Mail"),
+        F_GAMES("place_games", "Folder Jörmungandr opens", "Games"),
         F_CAR("place_car", "Folder the longship's hull opens", "Car"),
         F_SMART_HOME("place_smart_home", "Folder opened by holding the longhouse", "Smart Home"),
         HOUSE_USE("house_use", "House using now (W)", "sensor.sense_monitor_total_power"),
@@ -56,7 +58,7 @@ object SteadingConfig {
 
     /** The folders that live in the scene (each one's name is set in its entry). */
     val PLACE_FOLDERS = listOf(Entities.F_NETWORK, Entities.F_PERSONAL, Entities.F_FINANCE, Entities.F_VIDEO, Entities.F_WORK,
-        Entities.F_FOOD, Entities.F_SHOP, Entities.F_CAR, Entities.F_SMART_HOME)
+        Entities.F_FOOD, Entities.F_SHOP, Entities.F_MAIL, Entities.F_GAMES, Entities.F_CAR, Entities.F_SMART_HOME)
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences("ygg_steading", Context.MODE_PRIVATE)

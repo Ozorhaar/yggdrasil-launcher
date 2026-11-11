@@ -512,6 +512,17 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** The folder named [name] (made if there is none, kept off the grid) holding [keys]; their icons leave the grid. */
+    fun gatherInto(name: String, keys: Collection<String>): Int {
+        if (keys.isEmpty()) return 0
+        val f = folders.values.firstOrNull { it.name.trim().equals(name, ignoreCase = true) }
+            ?: Folder(newId(), name, emptyList()).also { folders[it.id] = it }
+        keys.forEach { k -> if (k !in f.apps) f.apps.add(k); pages.forEach { p -> p.indices.forEach { if (p[it] == k) p[it] = null } } }
+        replaceRef(f.ref, null)
+        save()
+        return keys.size
+    }
+
     /** Takes an app's icon off the home grid (it stays in the drawer). */
     fun removeFromGrid(key: String) {
         pages.forEach { p -> p.indices.forEach { if (p[it] == key) p[it] = null } }

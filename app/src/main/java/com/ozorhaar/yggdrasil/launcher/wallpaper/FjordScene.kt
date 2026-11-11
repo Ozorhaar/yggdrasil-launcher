@@ -96,7 +96,7 @@ class FjordScene(ctx: Context) {
          * (where the prop stands) and its tap box around the anchor. The World Tree stands in the sky,
          * so its box is in the screen's own art coordinates.
          */
-        enum class Place(val ax: Float, val ay: Float, val box: FloatArray, val sky: Boolean = false) {
+        enum class Place(val ax: Float, val ay: Float, val box: FloatArray, val sky: Boolean = false, val tree: Boolean = false) {
             NETWORK(0f, 0f, floatArrayOf(40f, 1000f, 330f, 1330f), sky = true),
             PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
             FINANCE(150f, 1600f, floatArrayOf(-74f, -96f, 76f, 8f)),
@@ -104,6 +104,31 @@ class FjordScene(ctx: Context) {
             WORK(1225f, 1622f, floatArrayOf(-100f, -96f, 98f, 18f)),
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
             SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore
+            MAIL(0f, 0f, floatArrayOf(), tree = true),                     // Ratatoskr, on the World Tree's middle limb
+            GAMES(690f, 2440f, floatArrayOf(-612f, -92f, 500f, 30f)),     // Jörmungandr's coils in the water above the dock
+        }
+
+        /** The World Tree's middle limb, from the fork to its first split, as fractions of the tree's bitmap (x0, y0, x1, y1). */
+        private val LIMB = floatArrayOf(0.51787f, 0.74223f, 0.49408f, 0.60059f)
+
+        /** A point on the limb (u = 0 at the fork, 1 at its split) on screen, and the limb's angle. */
+        fun limbAt(w: Int, h: Int, xOffset: Float, u: Float): FloatArray {
+            val s = max(w / 1440f, h / 3120f)
+            val oy = (h - 3120 * s) / 2
+            val skyPar = (xOffset - 0.5f) * -0.03f * w * 0.4f
+            val th = h * 0.5f; val tw = th * 0.9f
+            val l = w * 0.34f + skyPar * 0.7f - tw / 2; val tp = oy + 3120 * s * 0.62f - th
+            val x0 = l + LIMB[0] * tw; val y0 = tp + LIMB[1] * th; val x1 = l + LIMB[2] * tw; val y1 = tp + LIMB[3] * th
+            return floatArrayOf(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, kotlin.math.atan2(y1 - y0, x1 - x0))
+        }
+
+        /** The anvil outside the smithy: it opens Bambu Handy. Must match Props.smithy. */
+        fun anvilRect(w: Int, h: Int, xOffset: Float): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val landX = ox - 1440 * s * 0.02f + (xOffset - 0.5f) * -0.03f * w
+            val x = landX + Place.WORK.ax * 1.04f * s; val y = oy + Place.WORK.ay * s
+            return android.graphics.RectF(x - 108f * s, y - 40f * s, x - 50f * s, y + 12f * s)
         }
 
         /** A place's tap box in screen pixels. Must match drawPlaces. */
@@ -112,6 +137,11 @@ class FjordScene(ctx: Context) {
             val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
             val par = (xOffset - 0.5f) * -0.03f * w
             val landX = ox - 1440 * s * 0.02f + par
+            if (pl.tree) {
+                val s0 = max(w / 1440f, h / 3120f)
+                val a = limbAt(w, h, xOffset, 0.12f); val b2 = limbAt(w, h, xOffset, 1.05f)
+                return android.graphics.RectF(min(a[0], b2[0]) - 46f * s0, b2[1] - 24f * s0, max(a[0], b2[0]) + 46f * s0, a[1] + 10f * s0)
+            }
             val b = if (pl == Place.SHOP && beached) floatArrayOf(-80f, -110f, 85f, 12f) else pl.box
             val ax = if (pl == Place.SHOP && beached) 1150f else pl.ax
             val ay = if (pl == Place.SHOP && beached) 1938f else pl.ay
@@ -507,6 +537,7 @@ class FjordScene(ctx: Context) {
                 paint.blendMode = null
             }
             paint.colorFilter = null; paint.alpha = 255
+            if (showPlaces) drawRatatoskr(c, w, h, xOffset, t, light, treeA)
             // something waits in Network: frost glints drift along the crown's branch tips
             if (showPlaces && Place.NETWORK.name in stirring) {
                 props.t = t
@@ -1273,13 +1304,31 @@ class FjordScene(ctx: Context) {
     }
 
     /** The places where the folders live, each standing on its spot in the mountain art (see [Place]). */
+    /** Ratatoskr on the World Tree's middle limb: still, or scurrying up and down while mail waits. */
+    private fun drawRatatoskr(c: Canvas, w: Int, h: Int, xOffset: Float, t: Float, light: Float, treeA: Float) {
+        val s = max(w / 1440f, h / 3120f)
+        val stir = Place.MAIL.name in stirring
+        val ph = t * 0.0011f
+        val u = if (stir) 0.22f + 0.78f * (0.5f - 0.5f * kotlin.math.cos(ph)) else 0.62f
+        val down = stir && sin(ph) < 0f
+        val pt = limbAt(w, h, xOffset, u)
+        props.light = light; props.t = t
+        c.save()
+        c.translate(pt[0], pt[1] + (if (stir) -2f * kotlin.math.abs(sin(t * 0.02f)) * s else 0f))
+        c.rotate(Math.toDegrees(pt[2].toDouble()).toFloat() + 90f)
+        c.scale(1.6f * s, (if (down) -1.6f else 1.6f) * s)
+        c.saveLayerAlpha(null, ((0.6f + 0.4f * treeA.coerceIn(0f, 1f)) * 255).toInt())
+        props.squirrel(c)
+        c.restore(); c.restore()
+    }
+
     private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {
         props.light = light; props.dark = dark; props.t = t
         props.forge = house?.forge == true && showForge
         props.printPct = house?.printPct ?: -1
         val st = stirring
         for (pl in Place.entries) {
-            if (pl.sky) continue
+            if (pl.sky || pl.tree) continue
             val stir = pl.name in st
             c.save()
             if (pl == Place.SHOP && beached) {
@@ -1299,7 +1348,8 @@ class FjordScene(ctx: Context) {
                 Place.WORK -> props.smithy(c, stir)
                 Place.FOOD -> props.cookfire(c, stir)
                 Place.SHOP -> props.knarr(c, stir)
-                Place.NETWORK -> Unit
+                Place.GAMES -> props.serpent(c, stir)
+                Place.NETWORK, Place.MAIL -> Unit
             }
             c.restore()
         }

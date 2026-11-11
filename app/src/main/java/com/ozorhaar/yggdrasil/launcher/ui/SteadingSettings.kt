@@ -74,7 +74,8 @@ internal fun SteadingSection(layout: com.ozorhaar.yggdrasil.launcher.data.Layout
             Text("Their tiles leave the home screen (" +
                 SteadingConfig.PLACE_FOLDERS.joinToString(", ") { SteadingConfig.text(ctx, it) } +
                 "); they open from the scene instead. The Google and Proton folders go (their apps stay in the app drawer), " +
-                "and so does the Visual Voicemail icon (it's on the rune band now).")
+                "and so does the Visual Voicemail icon (it's on the rune band now). Nine and Proton Mail go to Ratatoskr's Mail folder, " +
+                "Monopoly GO! to Jörmungandr's Games folder, and Bambu Handy's icon goes (the anvil opens it).")
         },
         confirmButton = {
             androidx.compose.material3.TextButton({
@@ -124,5 +125,20 @@ internal fun moveIntoScene(ctx: android.content.Context, layout: com.ozorhaar.yg
     dropped.forEach { layout.dropFolder(it) }
     val vvm = layout.pages.flatten().filterNotNull().filter { k -> listOf("com.tmobile.vvm.application", "com.samsung.vvm").any { k.contains(it) } }.distinct()
     vvm.forEach { layout.removeFromGrid(it) }
-    return "Moved ${moved.size} folders into the scene; removed ${dropped.size} folders and ${vvm.size} icon" + (if (vvm.size == 1) "" else "s")
+    // Ratatoskr carries the mail, Jörmungandr keeps the games; the anvil opens Bambu Handy itself
+    fun keysFor(vararg pkgs: String): List<String> {
+        val la = ctx.getSystemService(android.content.pm.LauncherApps::class.java)
+        val me = android.os.Process.myUserHandle()
+        val serial = ctx.getSystemService(android.os.UserManager::class.java).getSerialNumberForUser(me)
+        return pkgs.flatMap { pk -> runCatching { la.getActivityList(pk, me) }.getOrDefault(emptyList()) }
+            .map { "${it.componentName.flattenToString()}#$serial" }
+    }
+    val mail = layout.gatherInto(SteadingConfig.text(ctx, SteadingConfig.Entities.F_MAIL), keysFor("com.ninefolders.hd3", "ch.protonmail.android"))
+    val games = layout.gatherInto(SteadingConfig.text(ctx, SteadingConfig.Entities.F_GAMES), keysFor("com.scopely.monopolygo"))
+    layout.takeOffGrid(layout.folders.values.filter { it.name.trim().lowercase() in names }.map { it.id })
+    val bambu = layout.pages.flatten().filterNotNull().filter { it.startsWith("bbl.intl.bambulab.com/") }.distinct()
+    bambu.forEach { layout.removeFromGrid(it) }
+    val icons = vvm.size + bambu.size
+    return "Moved ${moved.size} folders into the scene" + (if (mail + games > 0) ", gathered $mail into Mail and $games into Games" else "") +
+        "; removed ${dropped.size} folders and $icons icon" + (if (icons == 1) "" else "s")
 }

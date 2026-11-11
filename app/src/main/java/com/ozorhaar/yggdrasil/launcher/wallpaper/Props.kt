@@ -199,8 +199,8 @@ internal class Props {
         fill(mix(0x07080b, 0x26262a, light)); c.drawRect(-82f, -10f, -72f, 2f, p)
         path.reset(); path.moveTo(-92f, -10f); path.lineTo(-62f, -10f); path.quadTo(-58f, -15f, -64f, -18f); path.lineTo(-90f, -18f); path.close()
         c.drawPath(path, p)
-        // something waits: the hammer rings on the anvil, a burst of sparks every few seconds
-        if (stir) {
+        // something waits, or the printer works: the hammer rings on the anvil, a burst of sparks every few seconds
+        if (stir || prog >= 0f) {
             val ph = (t % 2400f) / 2400f
             if (ph < 0.32f) {
                 val k = ph / 0.32f
@@ -288,5 +288,64 @@ internal class Props {
 
     companion object {
         const val EMBER = 0xE0703A; const val GOLD = 0xECD08F; const val FROST = 0x8FC4E0; const val BONE = 0xE8DCC4
+    }
+
+    /** Mail: Ratatoskr clinging to the World Tree's limb, head up (the caller flips him to run down), tail plumed. */
+    fun squirrel(c: Canvas) {
+        val fur = mix(0x3a1a0c, 0xa9532a, light); val dk = mix(0x1c0d06, 0x5e2a12, light)
+        fill(fur)
+        path.reset(); path.moveTo(3f, 10f); path.cubicTo(22f, 16f, 26f, -8f, 14f, -20f); path.cubicTo(10f, -25f, 4f, -22f, 6f, -16f)
+        path.cubicTo(14f, -8f, 12f, 6f, 2f, 4f); path.close(); c.drawPath(path, p)
+        rf.set(-7f, -13f, 7f, 13f); c.drawOval(rf, p)
+        c.drawCircle(-1f, -16f, 5.6f, p)
+        path.reset(); path.moveTo(-3f, -20f); path.lineTo(-1f, -27f); path.lineTo(2f, -20f); path.close(); c.drawPath(path, p)
+        stroke(dk, 2.2f); c.drawLine(-5f, -6f, -10f, -9f, p); c.drawLine(-5f, 8f, -10f, 11f, p)
+        fill(0xFF0A0604.toInt()); c.drawCircle(-3.2f, -17f, 1.2f, p)
+    }
+
+    /** Games: Jörmungandr's coils breaking the water (anchor on the waterline), the tail's tip at the left, his head at
+     *  the right: low and sleepy, or risen with a burning eye and a flicking tongue when a game calls. */
+    fun serpent(c: Canvas, stir: Boolean = false) {
+        val scale = mix(0x0c2224, 0x2e5f57, light); val spine = mix(0x061314, 0x1d3a35, light)
+        val humps = arrayOf(floatArrayOf(-430f, 150f, 0f), floatArrayOf(-210f, 170f, 1.3f), floatArrayOf(20f, 160f, 2.6f), floatArrayOf(240f, 140f, 3.9f))
+        val band = 24f
+        fun hump(x: Float, w: Float, ph: Float, refl: Boolean) {
+            val hh = 44f + 6f * sin(t * 0.0012f + ph)
+            fill(if (refl) argb(0.22f, scale) else scale)
+            path.reset(); path.moveTo(x - w / 2, 0f); path.cubicTo(x - w / 2, -hh * 1.33f, x + w / 2, -hh * 1.33f, x + w / 2, 0f)
+            path.lineTo(x + w / 2 - band, 0f)
+            path.cubicTo(x + w / 2 - band, -(hh - band) * 1.33f, x - w / 2 + band, -(hh - band) * 1.33f, x - w / 2 + band, 0f)
+            path.close(); c.drawPath(path, p)
+            if (refl) return
+            fill(spine)
+            for (k in 1 until 6) {
+                val a = (PI * (1 - k / 6.0)).toFloat()
+                val cx = x + kotlin.math.cos(a) * w / 2 * 0.98f; val cy = -sin(a) * hh
+                path.reset(); path.moveTo(cx - 5f, cy + 2f); path.lineTo(cx + kotlin.math.cos(a) * 3f, cy - 11f); path.lineTo(cx + 5f, cy + 2f); path.close()
+                c.drawPath(path, p)
+            }
+            stroke(argb(0.35f, mix(0x2a4a5a, 0xdde6f5, light * 0.6f)), 1.6f)
+            rf.set(x - w / 2 + band / 2 - band, -2f, x - w / 2 + band / 2 + band, 6f); c.drawOval(rf, p)
+            rf.set(x + w / 2 - band / 2 - band, -2f, x + w / 2 - band / 2 + band, 6f); c.drawOval(rf, p)
+        }
+        c.save(); c.scale(1f, -1f); for (hm in humps) hump(hm[0], hm[1], hm[2], true); c.restore()
+        for (hm in humps) hump(hm[0], hm[1], hm[2], false)
+        fill(scale)
+        val tf = 6f * sin(t * 0.002f)
+        path.reset(); path.moveTo(-560f, 0f); path.quadTo(-585f, -30f + tf, -606f, -22f + tf); path.quadTo(-588f, -14f + tf, -572f, 0f); path.close()
+        c.drawPath(path, p)
+        val hy = -(if (stir) 26f + 4f * sin(t * 0.003f) else 0f)
+        path.reset(); path.moveTo(350f, 0f); path.quadTo(352f, hy - 30f, 386f, hy - 34f); path.quadTo(430f, hy - 38f, 452f, hy - 22f)
+        path.quadTo(470f, hy - 14f, 468f, hy - 6f); path.quadTo(440f, hy - 4f, 420f, hy - 8f); path.quadTo(404f, hy + 4f, 392f, 0f); path.close()
+        fill(scale); c.drawPath(path, p)
+        fill(spine); path.reset(); path.moveTo(372f, hy - 32f); path.lineTo(380f, hy - 48f); path.lineTo(390f, hy - 34f); path.close(); c.drawPath(path, p)
+        if (stir) {
+            glow(c, 420f, hy - 24f, 26f, 0.7f, GOLD)
+            fill(0xFFFFC860.toInt()); rf.set(415f, hy - 27f, 425f, hy - 21f); c.drawOval(rf, p)
+            if (t % 1400f < 300f) {
+                stroke(0xFFB0402A.toInt(), 1.6f)
+                c.drawLine(468f, hy - 8f, 486f, hy - 6f, p); c.drawLine(486f, hy - 6f, 492f, hy - 10f, p); c.drawLine(486f, hy - 6f, 492f, hy - 2f, p)
+            }
+        } else { stroke(spine, 2f); c.drawLine(414f, hy - 24f, 426f, hy - 24f, p) }
     }
 }

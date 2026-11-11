@@ -662,12 +662,21 @@ fun LauncherRoot() {
                             }
                             return@detectTapGestures
                         }
-                        // the scene's places: the World Tree, runestone, cave, skald, smithy, cookfire and knarr
+                        // the anvil outside the smithy: Bambu Handy
+                        if (openFolder == null && placeAt(p) != null &&
+                            com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.anvilRect(rootSize[0], rootSize[1], wallX()).contains(p.x, p.y)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            launchPackage("Bambu Handy", "bbl.intl.bambulab.com", labels = listOf("bambu handy"))
+                            return@detectTapGestures
+                        }
+                        // the scene's places: the World Tree, Ratatoskr, runestone, cave, skald, smithy, cookfire, knarr and Jörmungandr
                         if (openFolder == null) placeAt(p)?.let { pl ->
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             val e = placeEntity(pl)
                             val f = cfgFolder(e)
-                            if (f != null) { folderFrom = p; showFolder(f) }
+                            val only = f?.apps?.singleOrNull()?.let { byKeyNow[it] }
+                            if (only != null) launch(only)
+                            else if (f != null) { folderFrom = p; showFolder(f) }
                             else Toast.makeText(ctx, "No folder named " + com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e), Toast.LENGTH_SHORT).show()
                             return@detectTapGestures
                         }
@@ -844,6 +853,7 @@ fun LauncherRoot() {
                     val e = placeEntity(pl); val f = cfgFolder(e)
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(w, h, x, pl), com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e), count(f), pl.name)
                 }
+                if (places) out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.anvilRect(w, h, x), "Bambu Handy", 0)
                 if (com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipHome) {
                     val car = cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_CAR)
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL), car?.name ?: "Car", count(car), "CAR")
@@ -2117,6 +2127,8 @@ private fun placeEntity(pl: com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene
     com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.WORK -> com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_WORK
     com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.FOOD -> com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_FOOD
     com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.SHOP -> com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SHOP
+    com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.MAIL -> com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_MAIL
+    com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.Place.GAMES -> com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_GAMES
 }
 
 /** A spot in the scene: where it is on screen, what it opens, and how many unread wait there. */
