@@ -469,6 +469,16 @@ class LayoutStore(context: Context) {
         save()
     }
 
+    /** Puts these built-in cards into one card ([provider]) where the first of them that's placed sits. */
+    fun combineCards(id: Int, provider: String, parts: List<String>) {
+        val spots = widgets.filter { it.provider in parts }
+        if (spots.isEmpty()) return
+        val at = parts.firstNotNullOfOrNull { p -> spots.firstOrNull { it.provider == p } } ?: spots.first()
+        widgets.removeAll { it.provider in parts || it.provider == provider }
+        widgets += WidgetSpot(id, provider, at.page, at.x, at.y, at.w, at.h)
+        save()
+    }
+
     /** Takes these folders' tiles off the home grid and dock; the folders stay (the scene opens them). */
     fun takeOffGrid(ids: Collection<String>) {
         ids.forEach { id -> folders[id]?.let { replaceRef(it.ref, null) } }

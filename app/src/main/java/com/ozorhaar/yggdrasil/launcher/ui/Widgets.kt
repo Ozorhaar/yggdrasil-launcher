@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -86,6 +87,7 @@ fun WidgetView(spot: WidgetSpot, width: Dp, height: Dp) {
     if (spot.provider == Skald.PROVIDER) { SkaldCard(); return }
     if (spot.provider == SkyCard.PROVIDER) { SkyCardView(); return }
     if (spot.provider == NornsCard.PROVIDER) { NornsCardView(); return }
+    if (spot.provider == SagaCard.PROVIDER) { SagaCardView(); return }
     val ctx = LocalContext.current
     val ygg = ctx.ygg
     val info = remember(spot.id) { runCatching { ygg.widgetManager.getAppWidgetInfo(spot.id) }.getOrNull() }
@@ -343,6 +345,7 @@ fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onW
             spot.provider == Skald.PROVIDER -> "Skald (now playing)"
             spot.provider == SkyCard.PROVIDER -> "Sky (weather)"
             spot.provider == NornsCard.PROVIDER -> "Norns (calendar)"
+            spot.provider == SagaCard.PROVIDER -> "Saga (Skald, Norns and Sky)"
             else -> info?.loadLabel(ctx.packageManager) ?: "Widget"
         }
     }
@@ -374,6 +377,17 @@ fun WidgetSheet(spot: WidgetSpot, layout: LayoutStore, onRemove: () -> Unit, onW
                     Column {
                         RuneText("Hide it and keep watch", 18.sp, Ygg.Frost)
                         RuneText("Shows a frost rune on its app's folder while you're on call", 13.sp, Ygg.Ash)
+                    }
+                }
+            }
+            val parts = listOf(Skald.PROVIDER, NornsCard.PROVIDER, SkyCard.PROVIDER)
+            if (spot.provider in parts && layout.widgets.count { it.provider in parts } >= 2) {
+                Box(Modifier.fillMaxWidth().clickable {
+                    layout.combineCards(SagaCard.ID, SagaCard.PROVIDER, parts); onClose()
+                }.padding(vertical = 12.dp)) {
+                    Column {
+                        RuneText("Combine the cards", 18.sp, Ygg.Frost)
+                        RuneText("The Skald, the Norns and the Sky in one card: swipe between them", 13.sp, Ygg.Ash)
                     }
                 }
             }
@@ -420,5 +434,47 @@ fun HomeMenu(onWidgets: () -> Unit, onSettings: () -> Unit, onClose: () -> Unit,
 private fun MenuChoice(text: String, onClick: () -> Unit) {
     Box(Modifier.clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp)) {
         RuneText(text, 19.sp, Ygg.Gold)
+    }
+}
+
+
+/** The Saga: the Skald, the Norns and the Sky in one card where the Skald sat; swipe between them. */
+object SagaCard {
+    const val PROVIDER = "ygg:saga"
+    const val ID = -4
+    const val WIDTH = 5
+    const val HEIGHT = 1
+}
+
+/** The Saga card: one page each for the Skald, the Norns and the Sky, dots to show which; keeps the last one shown. */
+@Composable
+fun SagaCardView() {
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("ygg_saga", android.content.Context.MODE_PRIVATE) }
+    val state = androidx.compose.foundation.pager.rememberPagerState(initialPage = prefs.getInt("page", 0).coerceIn(0, 2)) { 3 }
+    androidx.compose.runtime.LaunchedEffect(state.currentPage) { prefs.edit().putInt("page", state.currentPage).apply() }
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.pager.HorizontalPager(state, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { p ->
+            Box(Modifier.fillMaxSize()) {
+                when (p) {
+                    0 -> SkaldCard()
+                    1 -> NornsCardView()
+                    else -> SkyCardView()
+                }
+            }
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            repeat(3) { i ->
+                Box(
+                    Modifier.size(6.dp).background(
+                        if (i == state.currentPage) Ygg.Gold else Ygg.Gold.copy(alpha = 0.3f),
+                        androidx.compose.foundation.shape.CircleShape,
+                    )
+                )
+            }
+        }
     }
 }

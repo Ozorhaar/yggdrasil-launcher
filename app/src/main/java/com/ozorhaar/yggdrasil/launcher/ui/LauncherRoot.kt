@@ -807,7 +807,7 @@ fun LauncherRoot() {
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.sailArea(w, h, x), "Solar", 0)
                 }
                 val sh = cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SMART_HOME)
-                out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(w, h, x), "Home Assistant · hold: " + (sh?.name ?: "Smart Home"), count(sh))
+                out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.steadingArea(w, h, x), "Home · hold: " + (sh?.name ?: "Smart Home"), count(sh))
                 out
             }
         }

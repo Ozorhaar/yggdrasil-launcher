@@ -86,11 +86,11 @@ class FjordScene(ctx: Context) {
         enum class Place(val ax: Float, val ay: Float, val box: FloatArray, val sky: Boolean = false) {
             NETWORK(0f, 0f, floatArrayOf(40f, 1000f, 330f, 1330f), sky = true),
             PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
-            FINANCE(150f, 1630f, floatArrayOf(-74f, -96f, 76f, 8f)),
+            FINANCE(150f, 1600f, floatArrayOf(-74f, -96f, 76f, 8f)),
             VIDEO(78f, 1934f, floatArrayOf(-36f, -62f, 58f, 8f)),
             WORK(1225f, 1622f, floatArrayOf(-100f, -96f, 98f, 18f)),
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
-            SHOP(1210f, 2075f, floatArrayOf(-124f, -156f, 126f, 14f)),
+            SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore
         }
 
         /** A place's tap box in screen pixels. Must match drawPlaces. */
@@ -1202,7 +1202,8 @@ class FjordScene(ctx: Context) {
         for (pl in Place.entries) {
             if (pl.sky) continue
             c.save()
-            c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s); c.scale(s, s)
+            c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s)
+            if (pl == Place.SHOP) c.scale(s * 0.85f, s * 0.85f) else c.scale(s, s)
             when (pl) {
                 Place.PERSONAL -> props.runestone(c)
                 Place.FINANCE -> props.cave(c)
