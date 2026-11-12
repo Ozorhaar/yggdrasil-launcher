@@ -88,6 +88,9 @@ class FjordScene(ctx: Context) {
          */
         @Volatile var stirring: Set<String> = emptySet()
             set(v) { if (v != field) { field = v; wake?.invoke() } }
+        /** On call (from the watch widget): Dagaz is cut into the smithy's door, glowing frost. */
+        @Volatile var onCall = false
+            set(v) { if (v != field) { field = v; wake?.invoke() } }
         /** Where the moon hangs: below the Saga card, above and left of the longhouse. */
         const val MOON_X = 0.74f; const val MOON_Y = 0.31f
 
@@ -791,6 +794,7 @@ class FjordScene(ctx: Context) {
             animating || sailing -> 66L
             smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy || (showPlaces && stirring.isNotEmpty()) ||
                 (showPlaces && house?.movers?.isNotEmpty() == true) -> 125L
+            showPlaces && onCall -> 250L                       // the on-call rune's slow breath
             else -> 60_000L
         }
         animating = animating || smoke || sailing || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy ||
@@ -1368,6 +1372,7 @@ class FjordScene(ctx: Context) {
         props.light = light; props.dark = dark; props.t = t; props.moon = moonLight
         props.forge = house?.forge == true && showForge
         props.printPct = house?.printPct ?: -1
+        props.onCall = onCall
         val st = stirring
         for (pl in Place.entries) {
             if (pl.sky || pl.tree) continue

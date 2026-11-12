@@ -1,5 +1,6 @@
 package com.ozorhaar.yggdrasil.launcher.ui
 
+import androidx.compose.runtime.collectAsState
 import com.ozorhaar.yggdrasil.launcher.search.looselyHas
 import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
@@ -855,6 +856,12 @@ fun LauncherRoot() {
                 if (count(cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_SMART_HOME)) > 0) add("SMART_HOME")
             }
             androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.stirring = stir }
+            // on call (the watch widget says so): the smithy's door shows Dagaz; re-checked every minute
+            val watchTexts by ygg.watch.texts.collectAsState()
+            var watchTick by remember { mutableStateOf(System.currentTimeMillis()) }
+            LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(60_000L); watchTick = System.currentTimeMillis() } }
+            val onCall = places && ygg.watch.widgetId >= 0 && com.ozorhaar.yggdrasil.launcher.watch.Watch.isOnCall(watchTexts, watchTick)
+            androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.onCall = onCall }
             SceneMarks(revealing, drag.placeHover) {
                 val w = rootSize[0]; val h = rootSize[1]; val x = wallX()
                 val out = ArrayList<SceneMark>()

@@ -27,6 +27,8 @@ internal class Props {
     var snow = false
     /** The print's progress, 0..100, while the printer works (-1 otherwise): the smithy's forge brightens with it. */
     var printPct = -1
+    /** On call: Dagaz, the rune of day and waking, cut into the smithy's door in frost, breathing slowly. */
+    var onCall = false
     private val snowC get() = mix(0xDDE4EE, 0xF4F7FA, light)
     /** Hoarfrost, 0..1: on freezing nights without snow, a thin white rime where the snow would lie, sparkling. */
     var frost = 0f
@@ -209,6 +211,13 @@ internal class Props {
         fill(argb(0.55f + 0.4f * heat * (0.5f + 0.5f * dark), EMBER)); c.drawRect(-20f, -32f, 4f, 2f, p)
         if (prog >= 0f) { fill(argb(0.9f, GOLD)); c.drawRect(-18f, 1f - 32f * prog, 2f, 1f, p) }      // the print, rising like a pour
         else { fill(argb(0.35f * heat, GOLD)); c.drawRect(-16f, -12f, 0f, -2f, p) }
+        if (onCall) {
+            val a = 0.35f + 0.65f * (0.5f + 0.5f * sin(t * 0.0029f))
+            glow(c, -8f, -15f, 26f, 0.55f * a, FROST)
+            stroke(argb(a, 0xDDEEFA), 2.2f)
+            // Dagaz: two uprights joined by a cross, filling the doorway
+            c.drawLines(floatArrayOf(-16f, -27f, -16f, -5f, 0f, -27f, 0f, -5f, -16f, -27f, 0f, -5f, 0f, -27f, -16f, -5f), p)
+        }
         if (capped) {
             path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f)
             path.lineTo(60f, -42f); path.quadTo(34f, -65f, 0f, -69f); path.quadTo(-34f, -65f, -60f, -42f); path.close()
