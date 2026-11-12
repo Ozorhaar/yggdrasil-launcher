@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "yggdrasil-launcher"
-include(":app")
+include(":app", ":thingward")

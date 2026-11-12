@@ -1,0 +1,60 @@
+name: forge-thingward
+on:
+  push:
+    branches: [main]
+    paths: ["thingward/**", ".github/workflows/thingward.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # actions pinned to exact commits, so a moved tag can't change what runs here
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: SDK packages (the runner image ships the Android SDK)
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | sort -V | tail -1)
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@ac638b010cf58a27ee6c972d7336334ccaf61c96 # v4.4.1
+        with:
+          gradle-version: "8.11.1"
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.YGG_KEYSTORE_B64 }}
+        run: |
+          # never publish a debug-signed release
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::No signing key secret"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/ygg.p12"
+          echo "YGG_KEYSTORE=$RUNNER_TEMP/ygg.p12" >> "$GITHUB_ENV"
+      - name: Build and test
+        env:
+          YGG_KEYSTORE_PASSWORD: ${{ secrets.YGG_KEYSTORE_PASSWORD }}
+        run: gradle :thingward:testDebugUnitTest :thingward:assembleRelease --no-daemon --stacktrace
+      - name: No network permission, ever
+        run: |
+          AAPT2=$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          "$AAPT2" dump permissions thingward/build/outputs/apk/release/thingward-release.apk | tee perms.txt
+          if grep -q -e INTERNET -e NETWORK perms.txt; then echo "::error::Thingward must not have network permissions"; exit 1; fi
+      - name: Rename APK and checksum
+        run: |
+          A="Thingward-1.0.${{ github.run_number }}.apk"
+          cp thingward/build/outputs/apk/release/thingward-release.apk "$A"
+          sha256sum "$A" | tee "$A.sha256"
+          rm -f "$RUNNER_TEMP/ygg.p12"
+      - name: Release (never "latest": that stays the launcher's, for its updater)
+        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+        with:
+          tag_name: thingward-v1.0.${{ github.run_number }}
+          name: Thingward 1.0.${{ github.run_number }}
+          files: |
+            Thingward-*.apk
+            Thingward-*.apk.sha256
+          make_latest: false

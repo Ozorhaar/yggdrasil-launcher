@@ -2,7 +2,7 @@ name: forge-launcher
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md"]
+    paths-ignore: ["**.md", "thingward/**", ".github/workflows/thingward.yml"]
   workflow_dispatch:
 
 permissions:
