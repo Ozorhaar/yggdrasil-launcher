@@ -91,6 +91,24 @@ class FjordScene(ctx: Context) {
         /** On call (from the watch widget): Dagaz is cut into the smithy's door, glowing frost. */
         @Volatile var onCall = false
             set(v) { if (v != field) { field = v; wake?.invoke() } }
+        /** A Claude alert waits: Mímir's Well glows. Camera alerts wait: the beacon burns. */
+        @Volatile var mimir = false
+            set(v) { if (v != field) { field = v; wake?.invoke() } }
+        @Volatile var beaconLit = false
+            set(v) { if (v != field) { field = v; wake?.invoke() } }
+        /** Mímir's Well on the ridge where the World Tree stands, and the beacon cairn on the far-left ridge, in land art
+         *  coordinates, drawn at 1.3; their tap boxes are around them in screen art pixels. */
+        const val WELL_X = 585f; const val WELL_Y = 1495f
+        const val BEACON_X = 120f; const val BEACON_Y = 1457f
+        private fun landRect(w: Int, h: Int, xOffset: Float, ax: Float, ay: Float, l: Float, t: Float, r: Float, b: Float): android.graphics.RectF {
+            val s = max(w / 1440f, h / 3120f)
+            val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
+            val landX = ox - 1440 * s * 0.02f + (xOffset - 0.5f) * -0.03f * w
+            val x = landX + ax * 1.04f * s; val y = oy + ay * s
+            return android.graphics.RectF(x + l * s, y + t * s, x + r * s, y + b * s)
+        }
+        fun wellRect(w: Int, h: Int, xOffset: Float) = landRect(w, h, xOffset, WELL_X, WELL_Y, -26f, -82f, 56f, 20f)
+        fun beaconRect(w: Int, h: Int, xOffset: Float) = landRect(w, h, xOffset, BEACON_X, BEACON_Y, -62f, -175f, 62f, 18f)
         /** Where the moon hangs: below the Saga card, above and left of the longhouse. */
         const val MOON_X = 0.74f; const val MOON_Y = 0.31f
 
@@ -794,6 +812,7 @@ class FjordScene(ctx: Context) {
             animating || sailing -> 66L
             smoke || rowing || System.currentTimeMillis() - flareAt in 0..20_000 || busy || (showPlaces && stirring.isNotEmpty()) ||
                 (showPlaces && house?.movers?.isNotEmpty() == true) -> 125L
+            showPlaces && (mimir || beaconLit) -> 125L          // the well's rising light, the beacon's fire
             showPlaces && onCall -> 250L                       // the on-call rune's slow breath
             else -> 60_000L
         }
@@ -1405,6 +1424,12 @@ class FjordScene(ctx: Context) {
                 Place.GAMES -> props.serpent(c, stir)
                 Place.NETWORK, Place.MAIL -> Unit
             }
+            c.restore()
+        }
+        // Mímir's Well and the beacon cairn (they open apps, not folders)
+        for ((ax, ay) in arrayOf(WELL_X to WELL_Y, BEACON_X to BEACON_Y)) {
+            c.save(); c.translate(landX + ax * 1.04f * s, oy + ay * s); c.scale(s * 1.3f, s * 1.3f)
+            if (ax == WELL_X) props.well(c, mimir) else props.beacon(c, beaconLit)
             c.restore()
         }
     }

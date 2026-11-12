@@ -18,6 +18,11 @@ object Badges {
     /** The newest few notifications per package (never written to disk). */
     val previews: StateFlow<Map<String, List<Preview>>> = _previews
     @Volatile var connected = false
+    /** Key in [counts] for unseen camera alerts (Home Assistant's Frigate notifications). */
+    const val CAMERAS = "ygg:cameras"
+    @Volatile internal var service: BadgeService? = null
+    /** Clears the camera alerts (you've gone to look): the beacon goes out. */
+    fun clearCameraAlerts() { service?.clearCameras() }
 
     internal fun publish(map: Map<String, Int>, previews: Map<String, List<Preview>> = emptyMap()) {
         _counts.value = map
@@ -29,11 +34,13 @@ class BadgeService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         Badges.connected = true
+        Badges.service = this
         refresh()
     }
 
     override fun onListenerDisconnected() {
         Badges.connected = false
+        if (Badges.service === this) Badges.service = null
         Badges.publish(emptyMap())
     }
 
@@ -61,10 +68,20 @@ class BadgeService : NotificationListenerService() {
                 continue
             }
             map[sbn.packageName] = (map[sbn.packageName] ?: 0) + count
+            if (isCameraAlert(sbn)) map[Badges.CAMERAS] = (map[Badges.CAMERAS] ?: 0) + 1
         }
         // an app that posted only a summary (no individual notifications) still gets its count
         summaries.forEach { (pkg, c) -> if (pkg !in map) map[pkg] = c }
         Badges.publish(map, previews.mapValues { (_, l) -> l.sortedByDescending { it.time }.take(3) })
+    }
+
+    /** Home Assistant's camera alerts: the Frigate notifier tags them frigate-ai-… in the frigate-cameras group. */
+    private fun isCameraAlert(sbn: StatusBarNotification) =
+        sbn.packageName.startsWith("io.homeassistant.companion.android") &&
+            (sbn.notification.group == "frigate-cameras" || sbn.tag?.startsWith("frigate-ai-") == true)
+
+    internal fun clearCameras() {
+        runCatching { activeNotifications?.filter { isCameraAlert(it) }?.forEach { cancelNotification(it.key) } }
     }
 
     private fun previewOf(n: Notification, time: Long): Preview? {

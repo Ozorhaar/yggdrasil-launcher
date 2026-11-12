@@ -318,6 +318,52 @@ internal class Props {
         c.restore()
     }
 
+    /** Claude: Mímir's Well under the World Tree, a ring of stones round a dark pool and a stone cut with Ansuz
+     *  (Odin's word). While an alert waits, the pool glows frost and motes of light rise from it. */
+    fun well(c: Canvas, lit: Boolean) {
+        val k = if (lit) 0.6f + 0.4f * sin(t * 0.0025f) else 0f
+        if (lit) glow(c, 0f, -14f, 54f, 0.45f * k + 0.15f, FROST)
+        // the back of the ring, the pool, the front of the ring
+        fill(rock); rf.set(-31f, -20f, 31f, -6f); c.drawOval(rf, p)
+        fill(if (lit) argb(0.75f + 0.25f * k, mix(0x2a4a5a, 0xBFE2F2, 0.4f + 0.5f * k)) else mix(0x05070b, 0x1a2a34, light))
+        rf.set(-25f, -17f, 25f, -9f); c.drawOval(rf, p)
+        if (!lit && moon > 0.05f) glint(c, 8f, -13f, 3f, 0.5f * moon)
+        path.reset(); path.moveTo(-31f, -13f); path.lineTo(-30f, 0f); path.quadTo(0f, 9f, 30f, 0f); path.lineTo(31f, -13f)
+        path.quadTo(0f, -4f, -31f, -13f); path.close(); fill(rock); c.drawPath(path, p)
+        stroke(darkC, 1.4f); c.drawLines(floatArrayOf(-18f, -9f, -18f, 2f, 0f, -6f, 0f, 5f, 18f, -9f, 18f, 2f, -30f, -5f, 30f, -5f), p)
+        // the standing stone beside it, Ansuz cut in gold
+        path.reset(); path.moveTo(-44f, 0f); path.lineTo(-46f, -38f); path.quadTo(-42f, -50f, -36f, -40f); path.lineTo(-34f, 0f); path.close()
+        fill(rock); c.drawPath(path, p)
+        stroke(argb(0.45f + 0.35f * dark + 0.2f * k, if (lit) FROST else GOLD), 1.6f)
+        c.drawLines(floatArrayOf(-42f, -36f, -42f, -8f, -42f, -36f, -36f, -30f, -42f, -28f, -36f, -22f), p)
+        if (capped) { stroke(capC, 3f); c.drawLine(-28f, -18f, 28f, -18f, p) }
+        if (lit) for (i in 0 until 7) {
+            val life = 2600f; val age = ((t + i * life / 7) % life) / life
+            glint(c, sin(i * 2.1f + age * 3f) * 12f, -14f - age * 70f, 2f + 3f * (1 - age), (1 - age) * 0.9f, 0xDDEEFA)
+        }
+    }
+
+    /** Camera alerts: a beacon cairn on the ridge, an iron basket on a pole over a heap of stones. Unseen alerts:
+     *  it burns, throwing sparks, its glow on the ridge. */
+    fun beacon(c: Canvas, lit: Boolean) {
+        if (lit) glow(c, 0f, -96f, 110f, 0.5f + 0.15f * sin(t * 0.007f))
+        // the cairn
+        path.reset(); path.moveTo(-34f, 2f); path.quadTo(-30f, -22f, -12f, -34f); path.lineTo(12f, -34f); path.quadTo(30f, -22f, 34f, 2f); path.close()
+        fill(rock); c.drawPath(path, p)
+        stroke(darkC, 1.4f)
+        c.drawLines(floatArrayOf(-26f, -10f, 26f, -10f, -18f, -22f, 18f, -22f, -10f, 2f, -14f, -10f, 8f, -10f, 12f, -22f, 0f, -22f, -4f, -34f), p)
+        if (capped) { path.reset(); path.moveTo(-14f, -33f); path.quadTo(0f, -38f, 14f, -33f); stroke(capC, 3f); c.drawPath(path, p) }
+        // the pole and the basket
+        stroke(darkC, 4f); c.drawLine(0f, -34f, 0f, -86f, p)
+        path.reset(); path.moveTo(-15f, -100f); path.lineTo(15f, -100f); path.lineTo(10f, -86f); path.lineTo(-10f, -86f); path.close()
+        fill(mix(0x07080b, 0x26262a, light)); c.drawPath(path, p)
+        stroke(wood, 2.4f); c.drawLines(floatArrayOf(-12f, -101f, 6f, -107f, 12f, -101f, -6f, -108f), p)
+        if (lit) {
+            flames(c, 0f, -100f, 7f, 34f)
+            sparks(c, 0f, -122f, 12, 1900f, 110f)
+        } else if (moon > 0.05f) gleam(c, 0f, -100f, 10f, 3f, 0.25f * moon)
+    }
+
     companion object {
         const val EMBER = 0xE0703A; const val GOLD = 0xECD08F; const val FROST = 0x8FC4E0; const val BONE = 0xE8DCC4
     }

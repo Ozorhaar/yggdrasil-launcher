@@ -672,6 +672,22 @@ fun LauncherRoot() {
                             }
                             return@detectTapGestures
                         }
+                        // Mímir's Well: Claude. The beacon cairn: camera alerts, in Frigate (and they're cleared: you've gone to look)
+                        if (openFolder == null && rootSize[0] > 0 && layout.layoutMode == LayoutMode.GRID &&
+                            com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.on(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Touch.PLACES)) {
+                            if (com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.wellRect(rootSize[0], rootSize[1], wallX()).contains(p.x, p.y)) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                launchPackage("Claude", "com.anthropic.claude", labels = listOf("claude"))
+                                return@detectTapGestures
+                            }
+                            if (com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.beaconRect(rootSize[0], rootSize[1], wallX()).contains(p.x, p.y)) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                val frigate = byKeyNow.values.firstOrNull { !it.isShortcut && it.label.contains("frigate", ignoreCase = true) }
+                                if (frigate != null) launch(frigate) else ctx.openUrl("https://frigate.ozorhaar.com/review")
+                                com.ozorhaar.yggdrasil.launcher.services.Badges.clearCameraAlerts()
+                                return@detectTapGestures
+                            }
+                        }
                         // the anvil outside the smithy: Bambu Handy
                         if (openFolder == null && placeAt(p) != null &&
                             com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.anvilRect(rootSize[0], rootSize[1], wallX()).contains(p.x, p.y)) {
@@ -862,6 +878,9 @@ fun LauncherRoot() {
             LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(60_000L); watchTick = System.currentTimeMillis() } }
             val onCall = places && ygg.watch.widgetId >= 0 && com.ozorhaar.yggdrasil.launcher.watch.Watch.isOnCall(watchTexts, watchTick)
             androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.onCall = onCall }
+            val claudeWaiting = places && (badges["com.anthropic.claude"] ?: 0) > 0
+            val camerasWaiting = places && (badges[com.ozorhaar.yggdrasil.launcher.services.Badges.CAMERAS] ?: 0) > 0
+            androidx.compose.runtime.SideEffect { com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.mimir = claudeWaiting; com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.beaconLit = camerasWaiting }
             SceneMarks(revealing, drag.placeHover) {
                 val w = rootSize[0]; val h = rootSize[1]; val x = wallX()
                 val out = ArrayList<SceneMark>()
@@ -870,6 +889,8 @@ fun LauncherRoot() {
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.placeRect(w, h, x, pl), com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, e), count(f), pl.name)
                 }
                 if (places) out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.anvilRect(w, h, x), "Bambu Handy", 0)
+                if (places) out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.wellRect(w, h, x), "Claude", badges["com.anthropic.claude"] ?: 0)
+                if (places) out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.beaconRect(w, h, x), "Cameras · Frigate", badges[com.ozorhaar.yggdrasil.launcher.services.Badges.CAMERAS] ?: 0)
                 if (com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipHome) {
                     val car = cfgFolder(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_CAR)
                     out += SceneMark(com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.shipPartRect(w, h, x, com.ozorhaar.yggdrasil.launcher.wallpaper.FjordScene.Companion.ShipPart.HULL), car?.name ?: "Car", count(car), "CAR")
