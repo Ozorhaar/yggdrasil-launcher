@@ -49,7 +49,7 @@ jobs:
           cp thingward/build/outputs/apk/release/thingward-release.apk "$A"
           sha256sum "$A" | tee "$A.sha256"
           rm -f "$RUNNER_TEMP/ygg.p12"
-      - name: Release (never "latest": that stays the launcher's, for its updater)
+      - name: Release, never latest (latest stays the launcher's, for its updater)
         uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
         with:
           tag_name: thingward-v1.0.${{ github.run_number }}
