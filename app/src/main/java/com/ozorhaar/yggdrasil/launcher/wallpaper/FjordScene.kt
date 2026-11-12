@@ -107,7 +107,7 @@ class FjordScene(ctx: Context) {
             PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
             FINANCE(150f, 1600f, floatArrayOf(-74f, -96f, 76f, 8f)),
             VIDEO(440f, 1466f, floatArrayOf(-70f, -100f, 96f, 22f)),     // the skald on the ridge, drawn at 1.4: easy to find and tap
-            WORK(1265f, 1622f, floatArrayOf(-205f, -134f, 140f, 25f)),   // the smithy at 1.4: forge side opens Bambu Handy, the rest Work
+            WORK(1312f, 1640f, floatArrayOf(-205f, -134f, 118f, 25f)),   // the smithy at 1.4: forge side opens Bambu Handy, the rest Work
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
             SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore
             MAIL(0f, 0f, floatArrayOf(), tree = true),                     // Ratatoskr, on the World Tree's middle limb
