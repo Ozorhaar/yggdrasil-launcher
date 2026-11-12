@@ -152,17 +152,21 @@ fun SkaldCard() {
                 now.title != null -> now.title!!
                 else -> "The skald is silent"
             }
-            Text(
-                title, maxLines = 1,
-                style = TextStyle(color = Ygg.Bone, fontSize = 18.sp, fontFamily = Ygg.Runic),
-                modifier = Modifier.rollIfLong(),
-            )
+            androidx.compose.runtime.key(title) {      // a new song rolls again
+                Text(
+                    title, maxLines = 1,
+                    style = TextStyle(color = Ygg.Bone, fontSize = 18.sp, fontFamily = Ygg.Runic),
+                    modifier = Modifier.rollIfLong(),
+                )
+            }
             val sub = if (!allowed) "for the launcher, in Settings" else now.artist ?: if (now.title == null) "Tap play to resume" else ""
-            if (sub.isNotEmpty()) Text(
-                sub, maxLines = 1,
-                style = TextStyle(color = Ygg.Ash, fontSize = 14.sp, fontFamily = Ygg.Runic),
-                modifier = Modifier.rollIfLong(),
-            )
+            if (sub.isNotEmpty()) androidx.compose.runtime.key(title, sub) {
+                Text(
+                    sub, maxLines = 1,
+                    style = TextStyle(color = Ygg.Ash, fontSize = 14.sp, fontFamily = Ygg.Runic),
+                    modifier = Modifier.rollIfLong(),
+                )
+            }
         }
         Spacer(Modifier.width(6.dp))
         Control(Glyph.PREV) { transport(ctx, now.controller, KeyEvent.KEYCODE_MEDIA_PREVIOUS) }

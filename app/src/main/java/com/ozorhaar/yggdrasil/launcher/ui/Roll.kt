@@ -7,12 +7,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
- * Text that doesn't fit its line rolls slowly sideways, like a scroll unwinding, pausing at the
- * start each time; text that fits stays still.
+ * Text that doesn't fit its line rolls slowly sideways, like a scroll unwinding, twice, then rests
+ * at its start (it rolls again when the text changes); text that fits stays still. Rolling redraws
+ * the screen at its full refresh rate, so it mustn't run forever.
  */
 @OptIn(ExperimentalFoundationApi::class)
 fun Modifier.rollIfLong(): Modifier = this.basicMarquee(
-    iterations = Int.MAX_VALUE,
+    iterations = 2,
     initialDelayMillis = 1500,
     repeatDelayMillis = 2500,
     spacing = MarqueeSpacing(40.dp),
