@@ -112,18 +112,25 @@ class FjordScene(ctx: Context) {
             GAMES(690f, 2395f, floatArrayOf(-612f, -92f, 500f, 30f)),     // Jörmungandr's coils in the water above the dock
         }
 
-        /** The World Tree's middle limb, from the fork to its first split, as fractions of the tree's bitmap (x0, y0, x1, y1). */
-        private val LIMB = floatArrayOf(0.51787f, 0.74223f, 0.49408f, 0.60059f)
+        /** Ratatoskr's branch: the long limb reaching right over the fjord, as points along it (fractions of the
+         *  World Tree's drawn box, x then y), from where it leaves the trunk to its tip. Measured on the phone. */
+        private val BRANCH = floatArrayOf(0.61983f, 0.58808f, 0.70530f, 0.56314f, 0.81085f, 0.53603f)
 
-        /** A point on the limb (u = 0 at the fork, 1 at its split) on screen, and the limb's angle. */
+        /** A point along the branch (u = 0 at the trunk, 1 at the tip) on screen: x, y, its angle, and its half-thickness. */
         fun limbAt(w: Int, h: Int, xOffset: Float, u: Float): FloatArray {
             val s = max(w / 1440f, h / 3120f)
             val oy = (h - 3120 * s) / 2
             val skyPar = (xOffset - 0.5f) * -0.03f * w * 0.4f
             val th = h * 0.5f; val tw = th * 0.9f
             val l = w * 0.34f + skyPar * 0.7f - tw / 2; val tp = oy + 3120 * s * 0.62f - th
-            val x0 = l + LIMB[0] * tw; val y0 = tp + LIMB[1] * th; val x1 = l + LIMB[2] * tw; val y1 = tp + LIMB[3] * th
-            return floatArrayOf(x0 + (x1 - x0) * u, y0 + (y1 - y0) * u, kotlin.math.atan2(y1 - y0, x1 - x0))
+            val n = BRANCH.size / 2
+            val px = FloatArray(n) { l + BRANCH[it * 2] * tw }; val py = FloatArray(n) { tp + BRANCH[it * 2 + 1] * th }
+            val seg = FloatArray(n - 1) { kotlin.math.hypot(px[it + 1] - px[it], py[it + 1] - py[it]) }
+            var d = u.coerceIn(0f, 1f) * seg.sum(); var i = 0
+            while (i < n - 2 && d > seg[i]) { d -= seg[i]; i++ }
+            val f = (d / seg[i]).coerceIn(0f, 1f)
+            return floatArrayOf(px[i] + (px[i + 1] - px[i]) * f, py[i] + (py[i + 1] - py[i]) * f,
+                kotlin.math.atan2(py[i + 1] - py[i], px[i + 1] - px[i]), (14f - 5f * u) * s)
         }
 
         /** The anvil outside the smithy: it opens Bambu Handy. Must match Props.smithy. */
@@ -143,8 +150,8 @@ class FjordScene(ctx: Context) {
             val landX = ox - 1440 * s * 0.02f + par
             if (pl.tree) {
                 val s0 = max(w / 1440f, h / 3120f)
-                val a = limbAt(w, h, xOffset, 0.12f); val b2 = limbAt(w, h, xOffset, 1.05f)
-                return android.graphics.RectF(min(a[0], b2[0]) - 46f * s0, b2[1] - 24f * s0, max(a[0], b2[0]) + 46f * s0, a[1] + 10f * s0)
+                val a = limbAt(w, h, xOffset, 0f); val b2 = limbAt(w, h, xOffset, 1f)
+                return android.graphics.RectF(min(a[0], b2[0]) - 30f * s0, min(a[1], b2[1]) - 70f * s0, max(a[0], b2[0]) + 30f * s0, max(a[1], b2[1]) + 30f * s0)
             }
             val b = if (pl == Place.SHOP && beached) floatArrayOf(-80f, -110f, 85f, 12f) else pl.box
             val ax = if (pl == Place.SHOP && beached) 1150f else pl.ax
@@ -1317,27 +1324,32 @@ class FjordScene(ctx: Context) {
     }
 
     /** The places where the folders live, each standing on its spot in the mountain art (see [Place]). */
-    /** Ratatoskr on the World Tree's middle limb: still, or scurrying up and down while mail waits. */
+    /** Ratatoskr on his branch: sitting on top of it, or running up and down it while mail waits. */
     private fun drawRatatoskr(c: Canvas, w: Int, h: Int, xOffset: Float, t: Float, light: Float, treeA: Float) {
         val s = max(w / 1440f, h / 3120f)
         val stir = Place.MAIL.name in stirring
-        val ph = t * 0.0011f
-        val u = if (stir) 0.22f + 0.78f * (0.5f - 0.5f * kotlin.math.cos(ph)) else 0.62f
-        val down = stir && sin(ph) < 0f
+        // running: out to the tip and back, a little pause at each end
+        val ph = t * 0.0009f
+        val u = if (stir) (0.5f - 0.58f * kotlin.math.cos(ph)).coerceIn(0.02f, 0.98f) else 0.42f
+        val back = stir && sin(ph) < 0f
         val pt = limbAt(w, h, xOffset, u)
+        // on top of the branch: step out from its middle along the side facing the sky
+        val nx = sin(pt[2]); val ny = -kotlin.math.cos(pt[2])
+        val lift = pt[3] + 9f * s
         props.light = light; props.t = t; props.moon = moonLight
         if (stir) for (i in 0 until 5) {
-            val back = limbAt(w, h, xOffset, (u + (if (down) 1 else -1) * (0.05f + i * 0.045f)).coerceIn(0f, 1.1f))
+            val tr = limbAt(w, h, xOffset, (u + (if (back) 1 else -1) * (0.06f + i * 0.05f)).coerceIn(0f, 1f))
             val a = (1f - i / 5f) * (0.45f + 0.55f * moonLight) * (0.6f + 0.4f * sin(t * 0.01f + i))
-            props.glint(c, back[0] + sin(t * 0.004f + i * 2f) * 6f * s, back[1], (2.5f + 1.5f * (1 - i / 5f)) * s, a, 0xFFECD08F.toInt())
+            props.glint(c, tr[0] + nx * (tr[3] + 6f * s), tr[1] + ny * (tr[3] + 6f * s) + sin(t * 0.004f + i * 2f) * 4f * s,
+                (2.5f + 1.5f * (1 - i / 5f)) * s, a, 0xFFECD08F.toInt())
         }
         c.save()
-        c.translate(pt[0], pt[1] + (if (stir) -2f * kotlin.math.abs(sin(t * 0.02f)) * s else 0f))
+        c.translate(pt[0] + nx * lift, pt[1] + ny * lift + (if (stir) -3f * kotlin.math.abs(sin(t * 0.02f)) * s else 0f))
+        // his head points along the branch (toward the tip, or back toward the trunk), paws down on the bark
         c.rotate(Math.toDegrees(pt[2].toDouble()).toFloat() + 90f)
-        c.scale(1.6f * s, (if (down) -1.6f else 1.6f) * s)
-        c.saveLayerAlpha(null, ((0.6f + 0.4f * treeA.coerceIn(0f, 1f)) * 255).toInt())
+        c.scale(-2.1f * s, (if (back) -2.1f else 2.1f) * s)
         props.squirrel(c)
-        c.restore(); c.restore()
+        c.restore()
     }
 
     private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {

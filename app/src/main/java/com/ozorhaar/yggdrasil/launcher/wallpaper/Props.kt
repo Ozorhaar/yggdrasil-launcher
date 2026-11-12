@@ -296,7 +296,7 @@ internal class Props {
 
     /** Mail: Ratatoskr clinging to the World Tree's limb, head up (the caller flips him to run down), tail plumed. */
     fun squirrel(c: Canvas) {
-        val lit = max(light, 0.42f * moon)
+        val lit = max(light, 0.38f + 0.3f * moon)
         val fur = mix(0x3a1a0c, 0xa9532a, lit); val dk = mix(0x1c0d06, 0x5e2a12, lit)
         val sheen = moon * (0.75f + 0.25f * sin(t * 0.0021f)) * (1 - light)
         if (sheen > 0.03f) glow(c, 6f, -6f, 30f, 0.22f * sheen, GOLD)
