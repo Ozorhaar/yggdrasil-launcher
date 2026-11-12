@@ -132,7 +132,7 @@ class FjordScene(ctx: Context) {
             val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
             val landX = ox - 1440 * s * 0.02f + (xOffset - 0.5f) * -0.03f * w
             val x = landX + Place.WORK.ax * 1.04f * s; val y = oy + Place.WORK.ay * s
-            return android.graphics.RectF(x - 108f * s, y - 40f * s, x - 50f * s, y + 12f * s)
+            return android.graphics.RectF(x - 165f * s, y - 70f * s, x - 70f * s, y + 18f * s)
         }
 
         /** A place's tap box in screen pixels. Must match drawPlaces. */

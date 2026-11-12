@@ -180,7 +180,7 @@ internal class Props {
     /** Work: a smithy on a ledge of the slope, its forge glowing through the door, an anvil outside.
      *  While the printer works, sparks fly from its chimney. */
     fun smithy(c: Canvas, stir: Boolean = false) {
-        path.reset(); path.moveTo(-100f, 2f); path.lineTo(96f, 2f); path.lineTo(84f, 16f); path.quadTo(0f, 26f, -88f, 14f); path.close()
+        path.reset(); path.moveTo(-148f, 2f); path.lineTo(96f, 2f); path.lineTo(84f, 16f); path.quadTo(-10f, 26f, -136f, 14f); path.close()
         fill(rock); c.drawPath(path, p)
         fill(mix(0x141820, 0x5a5658, light)); c.drawRect(-52f, -42f, 52f, 2f, p)
         path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f); path.close()
@@ -198,6 +198,7 @@ internal class Props {
             fill(snowC); c.drawPath(path, p)
             stroke(snowC, 3f); c.drawLine(-96f, 1f, 92f, 1f, p)
         }
+        c.save(); c.translate(3.5f, -1f); c.scale(1.5f, 1.5f)          // the anvil: x -77 -> -112, 1.5x, foot on the ledge
         fill(mix(0x07080b, 0x26262a, light)); c.drawRect(-82f, -10f, -72f, 2f, p)
         path.reset(); path.moveTo(-92f, -10f); path.lineTo(-62f, -10f); path.quadTo(-58f, -15f, -64f, -18f); path.lineTo(-90f, -18f); path.close()
         c.drawPath(path, p)
@@ -215,6 +216,7 @@ internal class Props {
                 }
             }
         }
+        c.restore()
         if (forge) for (i in 0 until 10) {
             val life = 1600f; val age = ((t + i * 397f) % life) / life
             val sx = 37f + sin(i * 2.3f + age * 5f) * 10f + (i % 3 - 1) * age * 14f; val sy = -90f - age * 70f
