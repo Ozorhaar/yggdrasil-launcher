@@ -21,6 +21,8 @@ internal class Props {
     private val rf = RectF()
 
     var light = 1f; var dark = 0f; var t = 0f; var forge = false
+    /** Tonight's moonlight, 0..1: Jörmungandr's scales shimmer with it, Ratatoskr's fur takes a gold edge. */
+    var moon = 0f
     /** Snow lies on the roofs and stones. */
     var snow = false
     /** The print's progress, 0..100, while the printer works (-1 otherwise): the smithy's forge brightens with it. */
@@ -292,26 +294,37 @@ internal class Props {
 
     /** Mail: Ratatoskr clinging to the World Tree's limb, head up (the caller flips him to run down), tail plumed. */
     fun squirrel(c: Canvas) {
-        val fur = mix(0x3a1a0c, 0xa9532a, light); val dk = mix(0x1c0d06, 0x5e2a12, light)
+        val lit = max(light, 0.42f * moon)
+        val fur = mix(0x3a1a0c, 0xa9532a, lit); val dk = mix(0x1c0d06, 0x5e2a12, lit)
+        val sheen = moon * (0.75f + 0.25f * sin(t * 0.0021f)) * (1 - light)
+        if (sheen > 0.03f) glow(c, 6f, -6f, 30f, 0.22f * sheen, GOLD)
         fill(fur)
         path.reset(); path.moveTo(3f, 10f); path.cubicTo(22f, 16f, 26f, -8f, 14f, -20f); path.cubicTo(10f, -25f, 4f, -22f, 6f, -16f)
         path.cubicTo(14f, -8f, 12f, 6f, 2f, 4f); path.close(); c.drawPath(path, p)
+        if (sheen > 0.03f) {                                     // the tail's edge, catching the moon gold
+            stroke(argb(0.75f * sheen, GOLD), 1.3f)
+            path.reset(); path.moveTo(3f, 10f); path.cubicTo(22f, 16f, 26f, -8f, 14f, -20f); path.cubicTo(10f, -25f, 4f, -22f, 6f, -16f)
+            c.drawPath(path, p); fill(fur)
+        }
         rf.set(-7f, -13f, 7f, 13f); c.drawOval(rf, p)
         c.drawCircle(-1f, -16f, 5.6f, p)
         path.reset(); path.moveTo(-3f, -20f); path.lineTo(-1f, -27f); path.lineTo(2f, -20f); path.close(); c.drawPath(path, p)
         stroke(dk, 2.2f); c.drawLine(-5f, -6f, -10f, -9f, p); c.drawLine(-5f, 8f, -10f, 11f, p)
+        if (sheen > 0.03f) { stroke(argb(0.55f * sheen, GOLD), 1.1f); c.drawArc(-6.6f, -21.6f, 4.6f, -10.4f, -70f, 120f, false, p) }
         fill(0xFF0A0604.toInt()); c.drawCircle(-3.2f, -17f, 1.2f, p)
     }
 
     /** Games: Jörmungandr's coils breaking the water (anchor on the waterline), the tail's tip at the left, his head at
      *  the right: low and sleepy, or risen with a burning eye and a flicking tongue when a game calls. */
     fun serpent(c: Canvas, stir: Boolean = false) {
-        val scale = mix(0x0c2224, 0x2e5f57, light); val spine = mix(0x061314, 0x1d3a35, light)
+        val lit = max(light, 0.38f * moon)
+        val scale = mix(0x0c2224, 0x2e5f57, lit); val spine = mix(0x061314, 0x1d3a35, lit)
+        val silver = moon * (1 - light)
         val humps = arrayOf(floatArrayOf(-430f, 150f, 0f), floatArrayOf(-210f, 170f, 1.3f), floatArrayOf(20f, 160f, 2.6f), floatArrayOf(240f, 140f, 3.9f))
         val band = 24f
         fun hump(x: Float, w: Float, ph: Float, refl: Boolean) {
             val hh = 44f + 6f * sin(t * 0.0012f + ph)
-            fill(if (refl) argb(0.22f, scale) else scale)
+            fill(if (refl) argb(0.22f + 0.1f * silver, scale) else scale)
             path.reset(); path.moveTo(x - w / 2, 0f); path.cubicTo(x - w / 2, -hh * 1.33f, x + w / 2, -hh * 1.33f, x + w / 2, 0f)
             path.lineTo(x + w / 2 - band, 0f)
             path.cubicTo(x + w / 2 - band, -(hh - band) * 1.33f, x - w / 2 + band, -(hh - band) * 1.33f, x - w / 2 + band, 0f)
@@ -323,6 +336,18 @@ internal class Props {
                 val cx = x + kotlin.math.cos(a) * w / 2 * 0.98f; val cy = -sin(a) * hh
                 path.reset(); path.moveTo(cx - 5f, cy + 2f); path.lineTo(cx + kotlin.math.cos(a) * 3f, cy - 11f); path.lineTo(cx + 5f, cy + 2f); path.close()
                 c.drawPath(path, p)
+            }
+            if (silver > 0.03f) {
+                // the moon on his scales: a cool edge along the crest, and glints sliding along it
+                stroke(argb(0.35f * silver, 0xCFDBF0), 1.8f)
+                path.reset(); path.moveTo(x - w / 2, 0f); path.cubicTo(x - w / 2, -hh * 1.33f, x + w / 2, -hh * 1.33f, x + w / 2, 0f)
+                c.drawPath(path, p)
+                for (j in 0 until 3) {
+                    val u = ((t * 0.00018f + ph * 0.37f + j / 3f) % 1f)
+                    val a = (PI * (1 - u)).toFloat()
+                    val tw = sin(u * PI.toFloat())
+                    glint(c, x + kotlin.math.cos(a) * w / 2, -sin(a) * hh * 1.0f, 4f + 4f * tw, 0.8f * silver * tw)
+                }
             }
             stroke(argb(0.35f, mix(0x2a4a5a, 0xdde6f5, light * 0.6f)), 1.6f)
             rf.set(x - w / 2 + band / 2 - band, -2f, x - w / 2 + band / 2 + band, 6f); c.drawOval(rf, p)

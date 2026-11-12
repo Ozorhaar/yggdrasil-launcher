@@ -553,7 +553,8 @@ class LayoutStore(context: Context) {
         var changed = false
         folders.values.toList().forEach { f ->
             if (f.apps.removeAll { gone(it) }) changed = true
-            if (f.apps.size < 2) { dissolveIfSmall(f); changed = true }
+            val tiled = pages.any { p -> f.ref in p } || f.ref in dock
+            if (f.apps.size < 2 && tiled) { dissolveIfSmall(f); changed = true }
         }
         fun bad(v: String?) = v != null && !isFolderRef(v) && gone(v)
         pages.forEach { page -> page.indices.forEach { i -> if (bad(page[i])) { page[i] = null; changed = true } } }

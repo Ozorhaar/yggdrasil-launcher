@@ -242,6 +242,15 @@ fun LauncherRoot() {
 
     LaunchedEffect(apps) {
         if (apps.isNotEmpty()) layout.prune(apps.map { it.key }.toSet(), apps.map { it.packageName }.toSet())
+        // 2.0.8: Ratatoskr's Mail and Jörmungandr's Games, made with their apps (once; after that they're yours to change)
+        val pf = ctx.getSharedPreferences("ygg_steading", android.content.Context.MODE_PRIVATE)
+        if (apps.isNotEmpty() && !pf.getBoolean("creatures_folders", false)) {
+            fun keys(vararg pk: String) = apps.filter { it.shortcut == null && it.packageName in pk }.map { it.key }
+            layout.gatherInto(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_MAIL), keys("com.ninefolders.hd3", "ch.protonmail.android"))
+            layout.gatherInto(com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.text(ctx, com.ozorhaar.yggdrasil.launcher.data.SteadingConfig.Entities.F_GAMES), keys("com.scopely.monopolygo"))
+            keys("bbl.intl.bambulab.com").forEach { layout.removeFromGrid(it) }
+            pf.edit().putBoolean("creatures_folders", true).apply()
+        }
     }
     // a folder that dissolved (or was ungrouped) closes itself
     openFolder?.let { if (!layout.folders.containsKey(it)) openFolder = null }

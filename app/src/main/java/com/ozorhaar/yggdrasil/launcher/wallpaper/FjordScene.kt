@@ -71,6 +71,8 @@ class FjordScene(ctx: Context) {
     private var showHearth = true; private var showFire = true; private var showForge = true
     private var showLeak = true; private var showYule = true; private var showPlaces = true
     private val props = Props()
+    /** Tonight's moonlight on the scene, 0..1 (0 by day). */
+    private var moonLight = 0f
     /** The name-day feast is on (1 January, or a preview). */
     private var feast = false
 
@@ -84,6 +86,8 @@ class FjordScene(ctx: Context) {
          */
         @Volatile var stirring: Set<String> = emptySet()
             set(v) { if (v != field) { field = v; wake?.invoke() } }
+        /** Where the moon hangs: below the Saga card, above and left of the longhouse. */
+        const val MOON_X = 0.74f; const val MOON_Y = 0.31f
 
         /** The fjord has iced over in a long cold spell: the knarr is drawn up on the shore. */
         @Volatile var beached = false
@@ -105,7 +109,7 @@ class FjordScene(ctx: Context) {
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
             SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore
             MAIL(0f, 0f, floatArrayOf(), tree = true),                     // Ratatoskr, on the World Tree's middle limb
-            GAMES(690f, 2440f, floatArrayOf(-612f, -92f, 500f, 30f)),     // Jörmungandr's coils in the water above the dock
+            GAMES(690f, 2395f, floatArrayOf(-612f, -92f, 500f, 30f)),     // Jörmungandr's coils in the water above the dock
         }
 
         /** The World Tree's middle limb, from the fork to its first split, as fractions of the tree's bitmap (x0, y0, x1, y1). */
@@ -482,10 +486,19 @@ class FjordScene(ctx: Context) {
         // moon / sun
         val moonAge = Moon.age(now)
         val moonLit = Moon.lit(moonAge)
-        val moonA = (p.dark - 0.5f).coerceAtLeast(0f) * 2 * (1 - cloud) * (0.25f + 0.75f * moonLit)
+        val nightK = ((p.dark - 0.5f) * 2).coerceIn(0f, 1f)
+        val moonA = nightK * (1 - cloud) * (0.25f + 0.75f * moonLit)
+        // the moonlight on the scene: the phase, thinned by cloud, never below a little starlight
+        moonLight = nightK * max(0.22f, moonLit * (1 - 0.65f * cloud))
+        val mx = w * MOON_X + skyPar; val my = h * MOON_Y; val r = 34 * s * 1.6f
+        // behind cloud: no disc, only the moon's light diffused through it
+        val veiled = nightK * cloud * moonLit
+        if (veiled > 0.02f) {
+            paint.shader = RadialGradient(mx, my, r * 9, intArrayOf(argb(0.28f * veiled, 0xFFDCE4F2.toInt()), 0), null, Shader.TileMode.CLAMP)
+            c.drawCircle(mx, my, r * 9, paint); paint.shader = null
+        }
         if (moonA > 0.02f) {
             // tonight's real phase: a glow that grows with it, the dark face faintly, the lit part bright
-            val mx = w * 0.78f + skyPar; val my = h * 0.13f; val r = 34 * s * 1.6f
             paint.shader = RadialGradient(mx, my, r * 5, intArrayOf(argb(0.35f * moonA * moonLit, 0xFFE8F0FF.toInt()), 0), null, Shader.TileMode.CLAMP)
             c.drawCircle(mx, my, r * 5, paint); paint.shader = null
             paint.color = argb(0.85f * moonA, mix(top, 0xFF2A3348.toInt(), 0.5f)); c.drawCircle(mx, my, r, paint)
@@ -640,7 +653,7 @@ class FjordScene(ctx: Context) {
         // glints on the water under the sun, glow or moon
         val glintA = max(p.glow, max(light * 0.35f, moonA * 0.6f)) * (1 - cloud * 0.85f)
         if (glintA > 0.03f) {
-            val gx = if (moonA > p.glow && moonA > light) w * 0.78f + skyPar else valleyX
+            val gx = if (moonA > p.glow && moonA > light) w * MOON_X + skyPar else valleyX
             val gc = if (moonA > p.glow && moonA > light) 0xFFDDE6F5.toInt() else 0xFFECD08F.toInt()
             paint.colorFilter = null
             for (g in glints) {
@@ -1312,7 +1325,12 @@ class FjordScene(ctx: Context) {
         val u = if (stir) 0.22f + 0.78f * (0.5f - 0.5f * kotlin.math.cos(ph)) else 0.62f
         val down = stir && sin(ph) < 0f
         val pt = limbAt(w, h, xOffset, u)
-        props.light = light; props.t = t
+        props.light = light; props.t = t; props.moon = moonLight
+        if (stir) for (i in 0 until 5) {
+            val back = limbAt(w, h, xOffset, (u + (if (down) 1 else -1) * (0.05f + i * 0.045f)).coerceIn(0f, 1.1f))
+            val a = (1f - i / 5f) * (0.45f + 0.55f * moonLight) * (0.6f + 0.4f * sin(t * 0.01f + i))
+            props.glint(c, back[0] + sin(t * 0.004f + i * 2f) * 6f * s, back[1], (2.5f + 1.5f * (1 - i / 5f)) * s, a, 0xFFECD08F.toInt())
+        }
         c.save()
         c.translate(pt[0], pt[1] + (if (stir) -2f * kotlin.math.abs(sin(t * 0.02f)) * s else 0f))
         c.rotate(Math.toDegrees(pt[2].toDouble()).toFloat() + 90f)
@@ -1323,7 +1341,7 @@ class FjordScene(ctx: Context) {
     }
 
     private fun drawPlaces(c: Canvas, landX: Float, oy: Float, s: Float, light: Float, dark: Float, t: Float) {
-        props.light = light; props.dark = dark; props.t = t
+        props.light = light; props.dark = dark; props.t = t; props.moon = moonLight
         props.forge = house?.forge == true && showForge
         props.printPct = house?.printPct ?: -1
         val st = stirring
@@ -1336,6 +1354,13 @@ class FjordScene(ctx: Context) {
                 props.knarrBeached(c, stir); c.restore(); continue
             }
             c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s)
+            if (moonLight > 0.03f && pl != Place.GAMES) {
+                val b = pl.box; val k = if (pl == Place.VIDEO) 1.4f else if (pl == Place.SHOP) 0.85f else 1f
+                val cx = (b[0] + b[2]) / 2 * k * s; val cy = (b[1] + b[3]) / 2 * k * s
+                val rr = max(b[2] - b[0], b[3] - b[1]) * 0.75f * k * s
+                paint.shader = RadialGradient(cx + rr * 0.15f, cy - rr * 0.15f, rr, intArrayOf(argb(0.20f * moonLight, 0xFFCFDBF0.toInt()), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(cx + rr * 0.15f, cy - rr * 0.15f, rr, paint); paint.shader = null
+            }
             when (pl) {
                 Place.SHOP -> c.scale(s * 0.85f, s * 0.85f)
                 Place.VIDEO -> c.scale(s * 1.4f, s * 1.4f)
