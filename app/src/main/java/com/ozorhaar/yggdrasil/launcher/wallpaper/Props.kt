@@ -28,6 +28,21 @@ internal class Props {
     /** The print's progress, 0..100, while the printer works (-1 otherwise): the smithy's forge brightens with it. */
     var printPct = -1
     private val snowC get() = mix(0xDDE4EE, 0xF4F7FA, light)
+    /** Hoarfrost, 0..1: on freezing nights without snow, a thin white rime where the snow would lie, sparkling. */
+    var frost = 0f
+    /** The moon's light (set by the scene) also makes the rime sparkle. */
+    private val capped get() = snow || frost > 0.05f
+    private val capC get() = if (snow) snowC else argb(0.22f + 0.45f * frost, mix(0xB8C8DC, 0xEAF2FA, light))
+    /** A few rime crystals twinkling along a line (only frost, not snow). */
+    private fun rime(c: Canvas, x0: Float, x1: Float, y: Float, n: Int = 4) {
+        if (snow || frost < 0.05f) return
+        val shine = frost * max(0.3f + 0.7f * moon, light * 0.6f)
+        for (i in 0 until n) {
+            val u = (i + 0.5f) / n
+            val tw = max(0f, sin(t * 0.0023f + i * 2.4f + x0 * 0.05f))
+            if (tw > 0.1f) glint(c, x0 + (x1 - x0) * u, y, 2.5f + 3f * tw, 0.8f * shine * tw)
+        }
+    }
 
     private fun mix(a: Int, b: Int, f: Float): Int {
         val k = f.coerceIn(0f, 1f)
@@ -114,11 +129,12 @@ internal class Props {
         val gw = 22f; val gh = 44f; val ox = -(minX + maxX) / 2f * gw; val oy = -72f
         p.strokeWidth = 2.6f
         for (i in r.indices step 4) c.drawLine(ox + r[i] * gw, oy + r[i + 1] * gh, ox + r[i + 2] * gw, oy + r[i + 3] * gh, p)
-        if (snow) {
+        if (capped) {
             path.reset(); path.moveTo(-25f, -78f); path.quadTo(-23f, -97f, 0f, -103f); path.quadTo(23f, -98f, 25f, -78f)
             path.lineTo(19f, -84f); path.quadTo(0f, -91f, -19f, -84f); path.close()
-            fill(snowC); c.drawPath(path, p)
+            fill(capC); c.drawPath(path, p)
         }
+        rime(c, -20f, 20f, -96f, 3)
     }
 
     /** Finance: a cave in the mountain's face, a dragon's gold heaped inside, glinting. */
@@ -127,7 +143,8 @@ internal class Props {
         fill(mix(0x030406, 0x14131a, light)); c.drawPath(path, p)
         stroke(rock, 7f)
         path.reset(); path.moveTo(-70f, 3f); path.quadTo(-68f, -78f, 0f, -91f); path.quadTo(66f, -80f, 72f, 3f); c.drawPath(path, p)
-        if (snow) { stroke(snowC, 4f); path.reset(); path.moveTo(-58f, -48f); path.quadTo(-52f, -86f, 0f, -95f); path.quadTo(52f, -88f, 60f, -50f); c.drawPath(path, p) }
+        if (capped) { stroke(capC, 4f); path.reset(); path.moveTo(-58f, -48f); path.quadTo(-52f, -86f, 0f, -95f); path.quadTo(52f, -88f, 60f, -50f); c.drawPath(path, p) }
+        rime(c, -50f, 50f, -86f, 4)
         glow(c, 0f, -12f, 70f, 0.18f + 0.32f * dark, GOLD)
         path.reset(); path.moveTo(-50f, 0f); path.quadTo(-36f, -24f, -12f, -30f); path.quadTo(10f, -36f, 30f, -22f)
         path.quadTo(44f, -12f, 52f, 0f); path.close()
@@ -192,12 +209,13 @@ internal class Props {
         fill(argb(0.55f + 0.4f * heat * (0.5f + 0.5f * dark), EMBER)); c.drawRect(-20f, -32f, 4f, 2f, p)
         if (prog >= 0f) { fill(argb(0.9f, GOLD)); c.drawRect(-18f, 1f - 32f * prog, 2f, 1f, p) }      // the print, rising like a pour
         else { fill(argb(0.35f * heat, GOLD)); c.drawRect(-16f, -12f, 0f, -2f, p) }
-        if (snow) {
+        if (capped) {
             path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f)
             path.lineTo(60f, -42f); path.quadTo(34f, -65f, 0f, -69f); path.quadTo(-34f, -65f, -60f, -42f); path.close()
-            fill(snowC); c.drawPath(path, p)
-            stroke(snowC, 3f); c.drawLine(-96f, 1f, 92f, 1f, p)
+            fill(capC); c.drawPath(path, p)
+            stroke(capC, 3f); c.drawLine(-96f, 1f, 92f, 1f, p)
         }
+        rime(c, -50f, 50f, -64f, 4); rime(c, -120f, 80f, 0f, 5)
         c.save(); c.translate(3.5f, -1f); c.scale(1.5f, 1.5f)          // the anvil: x -77 -> -112, 1.5x, foot on the ledge
         fill(mix(0x07080b, 0x26262a, light)); c.drawRect(-82f, -10f, -72f, 2f, p)
         path.reset(); path.moveTo(-92f, -10f); path.lineTo(-62f, -10f); path.quadTo(-58f, -15f, -64f, -18f); path.lineTo(-90f, -18f); path.close()
@@ -286,7 +304,8 @@ internal class Props {
     /** The knarr drawn up on the shore for the cold, its sail furled (no reflection: it's on land). */
     fun knarrBeached(c: Canvas, stir: Boolean = false) {
         c.save(); c.rotate(-5f); knarrShape(c, stir, furled = true)
-        if (snow) { stroke(snowC, 3f); c.drawLine(-100f, -13f, 100f, -13f, p) }
+        if (capped) { stroke(capC, 3f); c.drawLine(-100f, -13f, 100f, -13f, p) }
+        rime(c, -90f, 90f, -14f, 5)
         c.restore()
     }
 

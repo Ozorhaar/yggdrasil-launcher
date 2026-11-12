@@ -73,6 +73,8 @@ class FjordScene(ctx: Context) {
     private val props = Props()
     /** Tonight's moonlight on the scene, 0..1 (0 by day). */
     private var moonLight = 0f
+    /** Tonight's hoarfrost, 0..1. */
+    private var frostK = 0f
     /** The name-day feast is on (1 January, or a preview). */
     private var feast = false
 
@@ -461,6 +463,9 @@ class FjordScene(ctx: Context) {
         val bowA = if ((skyKind == Weather.Sky.CLEAR || skyKind == Weather.Sky.PARTLY) && sinceRain in 0..45 * 60_000L)
             (1f - sinceRain / (45f * 60_000f)) * (1f - p.dark * 2f).coerceIn(0f, 1f) else 0f
         props.snow = snowCover
+        // hoarfrost: at or below freezing with no snow lying, more the colder it is; it goes as the day warms
+        frostK = if (!snowCover && demo == null && tempF != null && tempF <= 32) ((33f - tempF) / 6f).coerceIn(0.15f, 1f) else 0f
+        props.frost = frostK
         val grey = mix(0xFF2A2E36.toInt(), 0xFF8A919C.toInt(), light)
         val top = mix(p.top, grey, cloud * 0.8f)
         val mid = mix(p.mid, grey, cloud * 0.85f)
@@ -549,6 +554,12 @@ class FjordScene(ctx: Context) {
             paint.colorFilter = PorterDuffColorFilter(mix(top, 0xFF000000.toInt(), 0.55f), PorterDuff.Mode.SRC_IN)
             paint.alpha = (235 * treeA).toInt()
             c.drawBitmap(tb, null, rect, paint)
+            if (frostK > 0.05f) {
+                paint.colorFilter = PorterDuffColorFilter(0xFFDCE8F4.toInt(), PorterDuff.Mode.SRC_IN)
+                paint.alpha = (110 * frostK * treeA.coerceAtLeast(0.4f) * (0.6f + 0.4f * max(moonLight, light))).toInt()
+                rect.offset(0f, -1.5f * s); c.drawBitmap(tb, null, rect, paint); rect.offset(0f, 1.5f * s)
+                paint.colorFilter = null; paint.alpha = 255
+            }
             if (auroraA > 0.03f) {
                 paint.colorFilter = PorterDuffColorFilter(0xFF3FE0A0.toInt(), PorterDuff.Mode.SRC_IN)
                 paint.blendMode = BlendMode.PLUS
@@ -910,9 +921,9 @@ class FjordScene(ctx: Context) {
         }
 
         // snow on the turf roof and the shelf it stands on
-        if (snow) {
+        if (snow || frostK > 0.05f) {
             val white = mix(0xFF8A93A6.toInt(), 0xFFEEF2F8.toInt(), light * 0.8f + 0.2f)
-            paint.color = white
+            paint.color = if (snow) white else argb(0.18f + 0.4f * frostK, mix(0xFFB8C8DC.toInt(), 0xFFEAF2FA.toInt(), light))
             path.reset()
             path.moveTo(l - 16 * s, wallTop + 4 * s)
             path.quadTo(l + 10 * s, ridge + 18 * s, l + 40 * s, ridge)
