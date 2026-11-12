@@ -180,7 +180,7 @@ internal class Props {
     /** Work: a smithy on a ledge of the slope, its forge glowing through the door, an anvil outside.
      *  While the printer works, sparks fly from its chimney. */
     fun smithy(c: Canvas, stir: Boolean = false) {
-        path.reset(); path.moveTo(-148f, 2f); path.lineTo(96f, 2f); path.lineTo(84f, 16f); path.quadTo(-10f, 26f, -136f, 14f); path.close()
+        path.reset(); path.moveTo(-140f, 2f); path.lineTo(96f, 2f); path.lineTo(84f, 16f); path.quadTo(-10f, 26f, -128f, 14f); path.close()
         fill(rock); c.drawPath(path, p)
         fill(mix(0x141820, 0x5a5658, light)); c.drawRect(-52f, -42f, 52f, 2f, p)
         path.reset(); path.moveTo(-66f, -38f); path.quadTo(-36f, -72f, 0f, -76f); path.quadTo(36f, -72f, 66f, -38f); path.close()

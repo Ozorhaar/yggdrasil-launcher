@@ -105,7 +105,7 @@ class FjordScene(ctx: Context) {
             PERSONAL(300f, 1466f, floatArrayOf(-34f, -108f, 34f, 8f)),
             FINANCE(150f, 1600f, floatArrayOf(-74f, -96f, 76f, 8f)),
             VIDEO(440f, 1466f, floatArrayOf(-70f, -100f, 96f, 22f)),     // the skald on the ridge, drawn at 1.4: easy to find and tap
-            WORK(1225f, 1622f, floatArrayOf(-100f, -96f, 98f, 18f)),
+            WORK(1265f, 1622f, floatArrayOf(-205f, -134f, 140f, 25f)),   // the smithy at 1.4: forge side opens Bambu Handy, the rest Work
             FOOD(1300f, 1934f, floatArrayOf(-40f, -100f, 40f, 8f)),
             SHOP(1190f, 2120f, floatArrayOf(-106f, -133f, 108f, 12f)),   // the knarr at 0.85: its mast clears the cookfire on the shore
             MAIL(0f, 0f, floatArrayOf(), tree = true),                     // Ratatoskr, on the World Tree's middle limb
@@ -133,13 +133,14 @@ class FjordScene(ctx: Context) {
                 kotlin.math.atan2(py[i + 1] - py[i], px[i + 1] - px[i]), (14f - 5f * u) * s)
         }
 
-        /** The anvil outside the smithy: it opens Bambu Handy. Must match Props.smithy. */
+        /** The smithy's forge side (the anvil and the glowing door): it opens Bambu Handy. Must match Props.smithy at 1.4. */
         fun anvilRect(w: Int, h: Int, xOffset: Float): android.graphics.RectF {
             val s = max(w / 1440f, h / 3120f)
             val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
             val landX = ox - 1440 * s * 0.02f + (xOffset - 0.5f) * -0.03f * w
             val x = landX + Place.WORK.ax * 1.04f * s; val y = oy + Place.WORK.ay * s
-            return android.graphics.RectF(x - 165f * s, y - 70f * s, x - 70f * s, y + 18f * s)
+            // the smithy's left half: the anvil and the glowing forge door (drawn at 1.4)
+            return android.graphics.RectF(x - 205f * s, y - 134f * s, x + 8f * s, y + 25f * s)
         }
 
         /** A place's tap box in screen pixels. Must match drawPlaces. */
@@ -1367,7 +1368,7 @@ class FjordScene(ctx: Context) {
             }
             c.translate(landX + pl.ax * 1.04f * s, oy + pl.ay * s)
             if (moonLight > 0.03f && pl != Place.GAMES) {
-                val b = pl.box; val k = if (pl == Place.VIDEO) 1.4f else if (pl == Place.SHOP) 0.85f else 1f
+                val b = pl.box; val k = if (pl == Place.SHOP) 0.85f else 1f
                 val cx = (b[0] + b[2]) / 2 * k * s; val cy = (b[1] + b[3]) / 2 * k * s
                 val rr = max(b[2] - b[0], b[3] - b[1]) * 0.75f * k * s
                 paint.shader = RadialGradient(cx + rr * 0.15f, cy - rr * 0.15f, rr, intArrayOf(argb(0.20f * moonLight, 0xFFCFDBF0.toInt()), 0), null, Shader.TileMode.CLAMP)
@@ -1375,7 +1376,7 @@ class FjordScene(ctx: Context) {
             }
             when (pl) {
                 Place.SHOP -> c.scale(s * 0.85f, s * 0.85f)
-                Place.VIDEO -> c.scale(s * 1.4f, s * 1.4f)
+                Place.VIDEO, Place.WORK -> c.scale(s * 1.4f, s * 1.4f)
                 else -> c.scale(s, s)
             }
             when (pl) {
