@@ -99,7 +99,7 @@ class FjordScene(ctx: Context) {
         /** Mímir's Well on the ridge where the World Tree stands, and the beacon cairn on the far-left ridge, in land art
          *  coordinates, drawn at 1.3; their tap boxes are around them in screen art pixels. */
         const val WELL_X = 610f; const val WELL_Y = 1497f   // the whole ring on the flat of the ridge, set a little into it
-        const val BEACON_X = 120f; const val BEACON_Y = 1457f
+        const val BEACON_X = 120f; const val BEACON_Y = 1470f   // the lowest ground under the cairn, so no edge hangs
         private fun landRect(w: Int, h: Int, xOffset: Float, ax: Float, ay: Float, l: Float, t: Float, r: Float, b: Float): android.graphics.RectF {
             val s = max(w / 1440f, h / 3120f)
             val ox = (w - 1440 * s) / 2; val oy = (h - 3120 * s) / 2
