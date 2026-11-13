@@ -523,7 +523,7 @@ class FjordScene(ctx: Context) {
         val nightK = ((p.dark - 0.5f) * 2).coerceIn(0f, 1f)
         val moonA = nightK * (1 - cloud) * (0.25f + 0.75f * moonLit)
         // the moonlight on the scene: the phase, thinned by cloud, never below a little starlight
-        moonLight = nightK * max(0.22f, moonLit * (1 - 0.65f * cloud))
+        moonLight = nightK * max(0.3f, moonLit * (1 - 0.65f * cloud))
         val mx = w * MOON_X + skyPar; val my = h * MOON_Y; val r = 34 * s * 1.6f
         // behind cloud: no disc, only the moon's light diffused through it
         val veiled = nightK * cloud * moonLit
@@ -1406,7 +1406,7 @@ class FjordScene(ctx: Context) {
                 val b = pl.box; val k = if (pl == Place.SHOP) 0.85f else 1f
                 val cx = (b[0] + b[2]) / 2 * k * s; val cy = (b[1] + b[3]) / 2 * k * s
                 val rr = max(b[2] - b[0], b[3] - b[1]) * 0.75f * k * s
-                paint.shader = RadialGradient(cx + rr * 0.15f, cy - rr * 0.15f, rr, intArrayOf(argb(0.20f * moonLight, 0xFFCFDBF0.toInt()), 0), null, Shader.TileMode.CLAMP)
+                paint.shader = RadialGradient(cx + rr * 0.15f, cy - rr * 0.15f, rr, intArrayOf(argb(0.42f * moonLight, 0xFFCFDBF0.toInt()), 0), null, Shader.TileMode.CLAMP)
                 c.drawCircle(cx + rr * 0.15f, cy - rr * 0.15f, rr, paint); paint.shader = null
             }
             when (pl) {
@@ -1428,7 +1428,13 @@ class FjordScene(ctx: Context) {
         }
         // Mímir's Well and the beacon cairn (they open apps, not folders)
         for ((ax, ay) in arrayOf(WELL_X to WELL_Y, BEACON_X to BEACON_Y)) {
-            c.save(); c.translate(landX + ax * 1.04f * s, oy + ay * s); c.scale(s * 1.3f, s * 1.3f)
+            c.save(); c.translate(landX + ax * 1.04f * s, oy + ay * s)
+            if (moonLight > 0.03f) {
+                val rr = 95f * s; val cy = -55f * s
+                paint.shader = RadialGradient(rr * 0.12f, cy, rr, intArrayOf(argb(0.42f * moonLight, 0xFFCFDBF0.toInt()), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(rr * 0.12f, cy, rr, paint); paint.shader = null
+            }
+            c.scale(s * 1.3f, s * 1.3f)
             if (ax == WELL_X) props.well(c, mimir) else props.beacon(c, beaconLit)
             c.restore()
         }
