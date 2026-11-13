@@ -322,6 +322,9 @@ internal class Props {
      *  (Odin's word). While an alert waits, the pool glows frost and motes of light rise from it. */
     fun well(c: Canvas, lit: Boolean) {
         val k = if (lit) 0.6f + 0.4f * sin(t * 0.0025f) else 0f
+        // a low hump of the ridge itself under the well and its stone, so they sit on the shoulder where it falls away
+        path.reset(); path.moveTo(-60f, 16f); path.quadTo(-52f, 1f, -36f, 0f); path.lineTo(30f, 0f); path.quadTo(46f, 2f, 56f, 24f); path.close()
+        fill(mix(0x1a151f, 0x3b2f45, light)); c.drawPath(path, p)
         if (lit) glow(c, 0f, -14f, 54f, 0.45f * k + 0.15f, FROST)
         // the back of the ring, the pool, the front of the ring
         fill(rock); rf.set(-31f, -20f, 31f, -6f); c.drawOval(rf, p)
