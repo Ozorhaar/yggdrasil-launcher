@@ -98,7 +98,7 @@ class FjordScene(ctx: Context) {
             set(v) { if (v != field) { field = v; wake?.invoke() } }
         /** Mímir's Well on the ridge where the World Tree stands, and the beacon cairn on the far-left ridge, in land art
          *  coordinates, drawn at 1.3; their tap boxes are around them in screen art pixels. */
-        const val WELL_X = 645f; const val WELL_Y = 1494f
+        const val WELL_X = 610f; const val WELL_Y = 1497f   // the whole ring on the flat of the ridge, set a little into it
         const val BEACON_X = 120f; const val BEACON_Y = 1457f
         private fun landRect(w: Int, h: Int, xOffset: Float, ax: Float, ay: Float, l: Float, t: Float, r: Float, b: Float): android.graphics.RectF {
             val s = max(w / 1440f, h / 3120f)
@@ -107,7 +107,7 @@ class FjordScene(ctx: Context) {
             val x = landX + ax * 1.04f * s; val y = oy + ay * s
             return android.graphics.RectF(x + l * s, y + t * s, x + r * s, y + b * s)
         }
-        fun wellRect(w: Int, h: Int, xOffset: Float) = landRect(w, h, xOffset, WELL_X, WELL_Y, -46f, -82f, 56f, 20f)
+        fun wellRect(w: Int, h: Int, xOffset: Float) = landRect(w, h, xOffset, WELL_X, WELL_Y, -40f, -82f, 56f, 20f)
         fun beaconRect(w: Int, h: Int, xOffset: Float) = landRect(w, h, xOffset, BEACON_X, BEACON_Y, -62f, -175f, 62f, 18f)
         /** Where the moon hangs: below the Saga card, above and left of the longhouse. */
         const val MOON_X = 0.74f; const val MOON_Y = 0.31f
