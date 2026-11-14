@@ -26,6 +26,8 @@ object Ward {
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun autoReply(ctx: Context) = prefs(ctx).getBoolean("auto_reply", true)
     fun setAutoReply(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("auto_reply", on).apply()
+    fun scamGuard(ctx: Context) = prefs(ctx).getBoolean("scam_guard", true)
+    fun setScamGuard(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("scam_guard", on).apply()
 
     fun granted(ctx: Context, p: String) = ctx.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
@@ -51,6 +53,10 @@ object Ward {
         val r = Classifier.classify(body)
         when (r.verdict) {
             Classifier.Verdict.NONE -> return
+            Classifier.Verdict.SCAM -> {
+                if (scamGuard(ctx)) { silence(ctx, from, body, now); log(ctx, from, body, "scam: silenced", null) }
+                else log(ctx, from, body, "scam: noted", null)
+            }
             Classifier.Verdict.SUSPECT -> log(ctx, from, body, "noted (looks like a scam)", r.keyword)
             Classifier.Verdict.OPT_OUT -> {
                 val word = r.keyword ?: "STOP"

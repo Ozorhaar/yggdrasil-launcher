@@ -129,7 +129,7 @@ fun Heimdall.Report?.hornColor(): Color = when (this?.mood) {
 
 /** What Heimdall sees, post by post. */
 @Composable
-fun HeimdallSheet(report: Heimdall.Report?, onClose: () -> Unit) {
+fun HeimdallSheet(report: Heimdall.Report?, onVordr: () -> Unit = {}, onThingward: () -> Unit = {}, onClose: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         val shape = CutCornerShape(16.dp)
         Column(
@@ -164,7 +164,13 @@ fun HeimdallSheet(report: Heimdall.Report?, onClose: () -> Unit) {
                 androidx.compose.material3.Text("Looked at $t", color = Ygg.Ash, fontSize = 12.sp)
             }
             Spacer(Modifier.height(14.dp))
-            RuneButton("Done") { onClose() }
+            // the rest of the watch: the phone's own check-up, and the text and call guard
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RuneButton("Vörðr") { onClose(); onVordr() }
+                RuneButton("Thingward") { onClose(); onThingward() }
+                Spacer(Modifier.weight(1f))
+                RuneButton("Done") { onClose() }
+            }
         }
     }
 }

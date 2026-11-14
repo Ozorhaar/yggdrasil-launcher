@@ -14,6 +14,8 @@ object Classifier {
         OPT_OUT,
         /** Campaign-flavoured but with scam hallmarks ("restore your status", prizes, refunds): only noted, never answered. */
         SUSPECT,
+        /** A scam text (fake toll, package, bank or prize with a link): silenced and logged, never answered. */
+        SCAM,
     }
 
     class Result(val verdict: Verdict, val keyword: String?, val why: String)
@@ -43,8 +45,21 @@ object Classifier {
     private val SENSITIVE = Regex(
         """\b(code|otp|passcode|pin|verification|verify|2fa|one[-\s]?time|pharmacy|prescription|rx|appointment|doctor|fraud|bank\w*|balance|delivery|delivered|tracking|order\s+#|password|log\s?in)\b""", I)
 
+    // ---- scam texts: a link plus the stories scammers tell, or the "reply Y to activate the link" trick
+    private val LINK = Regex("""(https?://\S+|\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(com|net|org|info|top|xyz|click|link|vip|shop|online|site|live|icu|cc|me|us|co|cfd|sbs|bond|life|world)(/\S*)?)""", I)
+    private val LURE = Regex(
+        """\b(unpaid\s+tolls?|toll\s+(balance|charges?|services?)|e-?z\s?pass|turnpike|redeliver\w*|(package|parcel|shipment)\s+(is\s+)?(on\s+hold|could\s+not|cannot|can't|was\s+not|undeliver\w*)|update\s+your\s+(address|payment|billing|information)|(account|card)\s+(has\s+been\s+|is\s+|was\s+)?(suspend\w*|lock\w*|restrict\w*|frozen|disabled)|verify\s+your\s+(identity|account)|unusual\s+(activity|sign)|final\s+(notice|reminder)|avoid\s+(a\s+)?(late\s+fee|penalt\w*|suspension)|traffic\s+(ticket|violation)|dmv|outstanding\s+(balance|fine)|you('ve|\s+have)?\s+won|claim\s+your|gift\s?card|tax\s+refund|irs|remote\s+job|work\s+from\s+home|daily\s+pay)\b""", I)
+    private val ACTIVATE = Regex("""reply\s+["'“]?y["'”]?\b.{0,60}\b(reopen|re-open|activate|exit)""", I)
+
+    fun isScam(body: String): Boolean {
+        val text = body.replace(Regex("\\s+"), " ")
+        return ACTIVATE.containsMatchIn(text) || (LINK.containsMatchIn(text) && LURE.containsMatchIn(text))
+    }
+
     fun classify(body: String): Result {
         val text = body.replace(Regex("\\s+"), " ")
+        // scams first: they wear bank and delivery words, which would otherwise make the text untouchable
+        if (isScam(text)) return Result(Verdict.SCAM, null, "scam hallmarks")
         if (SENSITIVE.containsMatchIn(text)) return Result(Verdict.NONE, null, "sensitive wording")
         val word = (OPT_OUT.find(text)?.groupValues?.get(1) ?: OPT_OUT2.find(text)?.groupValues?.get(1))?.uppercase()
         val disclaimer = DISCLAIMER.containsMatchIn(text)

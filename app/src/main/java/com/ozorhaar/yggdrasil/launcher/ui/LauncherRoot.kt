@@ -1041,7 +1041,9 @@ fun LauncherRoot() {
             )
         }
         peekGate?.let { g -> CameraPeek(g, gates) { peekGate = null } }
-        if (heimdallOpen) HeimdallSheet(heimdall) { heimdallOpen = false }
+        if (heimdallOpen) HeimdallSheet(heimdall,
+            onVordr = { launchPackage("Vörðr", "com.ozorhaar.vordr") },
+            onThingward = { launchPackage("Thingward", "com.ozorhaar.thingward") }) { heimdallOpen = false }
         if (hornCallOpen) HornCallSheet { hornCallOpen = false }
         if (greetingOpen) RuneStickGreeting { greetingOpen = false }
         if (steadingOpen) SteadingSheet(

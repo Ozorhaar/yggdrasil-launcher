@@ -45,6 +45,21 @@ class ClassifierTest {
         assertEquals(Verdict.NONE, v("Reminder: city council election info at the library. No reply needed.").verdict)
     }
 
+    @Test fun scams() {
+        assertEquals(Verdict.SCAM, v("Ohio Turnpike: You have an unpaid toll of \$6.99. Pay now to avoid a late fee: https://ohioturnpike-pay.top/x").verdict)
+        assertEquals(Verdict.SCAM, v("USPS: Your package is on hold due to an incomplete address. Update your address at usps.redeliver-help.com").verdict)
+        assertEquals(Verdict.SCAM, v("Chase: your card has been suspended. Verify your identity: chase-secure-alert.co/login").verdict)
+        assertEquals(Verdict.SCAM, v("(Please reply Y, then exit the text message and open it again to activate the link.)").verdict)
+        assertEquals(Verdict.SCAM, v("Congratulations, you've won a \$500 gift card! Claim your prize at bit-rewards.xyz").verdict)
+    }
+
+    @Test fun realNoticesAreNotScams() {
+        assertEquals(Verdict.NONE, v("UPS: Your package was delivered at 2:14 PM. Track: ups.com/track?id=1Z999").verdict)
+        assertEquals(Verdict.NONE, v("Your verification code is 482913").verdict)
+        assertEquals(Verdict.NONE, v("Check out this video youtube.com/watch?v=abc").verdict)
+        assertEquals(Verdict.NONE, v("Chase: A \$42.10 purchase was made on your card ending 1234. Not you? Call the number on your card.").verdict)
+    }
+
     @Test fun confirmations() {
         assertEquals(true, Classifier.isConfirmation("You have been unsubscribed and will receive no more messages."))
         assertEquals(true, Classifier.isConfirmation("You've opted out. Reply START to resubscribe"))

@@ -53,8 +53,9 @@ class MainActivity : Activity() {
     private fun render() {
         col.removeAllViews()
         text("Thingward", 28f, gold, bold = true, top = 0)
-        text("Political campaign texts that carry the \"Paid for by\" line get their opt-out word replied (STOP, END…) " +
-            "and their notification silenced. Texts from your contacts, codes, banks, pharmacies and deliveries are never touched. " +
+        text("Political campaign texts get their opt-out word replied (STOP, END…) and their notification silenced. " +
+            "Scam texts (fake tolls, packages, bank alerts and prizes with a link) are silenced and listed below, never answered; " +
+            "they stay in your messages so you can check them. Texts from your contacts, codes, banks, pharmacies and deliveries are never touched. " +
             "No internet permission: nothing here leaves the phone.", 14f, ash)
 
         text("Permissions", 18f, gold, bold = true, top = 22)
@@ -82,6 +83,14 @@ class MainActivity : Activity() {
         })
         text(if (Ward.autoReply(this)) "On: at most 20 replies a day, and one per sender a month." else
             "Watch only: it notes what it would reply, sends nothing.", 13f, ash)
+
+        text("Scam texts", 18f, gold, bold = true, top = 22)
+        col.addView(Switch(this).apply {
+            text = "Silence scam texts"; textSize = 15f; setTextColor(bone); isChecked = Ward.scamGuard(this@MainActivity)
+            setPadding(0, dp(8), 0, 0)
+            setOnCheckedChangeListener { _, on -> Ward.setScamGuard(this@MainActivity, on); render() }
+        })
+        text("Never replies to them: answering only tells a scammer your number is real. Never open their links.", 13f, ash)
 
         text("What it has done", 18f, gold, bold = true, top = 22)
         val log = Ward.readLog(this)
