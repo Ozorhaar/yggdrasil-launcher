@@ -2146,6 +2146,18 @@ fun RuneButton(text: String, onClick: () -> Unit) {
 /** Icons a fifth smaller than the launcher's original size (all but the dock's). */
 private const val ICON_SCALE = 0.8f
 
+/** Opens a page of Home Assistant in its companion app (e.g. "yggdrasil-weather/now"); the app's home if that fails. */
+internal fun android.content.Context.openHomeAssistantAt(path: String) {
+    val pkg = listOf("io.homeassistant.companion.android", "io.homeassistant.companion.android.minimal")
+        .firstOrNull { runCatching { packageManager.getPackageInfo(it, 0) }.isSuccess }
+    val ok = pkg != null && runCatching {
+        startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("homeassistant://navigate/$path?server=default"))
+            .setPackage(pkg).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.isSuccess
+    if (!ok) openHomeAssistant()
+}
+
 /** Opens the Home Assistant companion app (full or minimal build). */
 internal fun android.content.Context.openHomeAssistant() {
     val pkgs = listOf("io.homeassistant.companion.android", "io.homeassistant.companion.android.minimal")

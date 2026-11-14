@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CutCornerShape
@@ -64,6 +65,7 @@ object SkyCard {
     const val HEIGHT = 1
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SkyCardView() {
     val ctx = LocalContext.current
@@ -100,7 +102,11 @@ fun SkyCardView() {
             .clip(shape)
             .background(Brush.horizontalGradient(listOf(Ygg.Night2, Ygg.Night)), shape)
             .border(1.5.dp, Dusk.gold.copy(alpha = 0.85f), shape)
-            .then(if (warn) Modifier.clickable { showAlerts = true } else Modifier)
+            // tap: the full forecast in Home Assistant; hold (while a warning is out): its words
+            .combinedClickable(
+                onClick = { ctx.openHomeAssistantAt("yggdrasil-weather/now") },
+                onLongClick = if (warn) ({ showAlerts = true }) else null,
+            )
             .padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
