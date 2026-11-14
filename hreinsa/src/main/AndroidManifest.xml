@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- No permissions at all. Photos arrive through the share sheet's own one-time grant;
+         nothing here can reach the network. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
+    <application
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/no_backup"
+        android:icon="@drawable/ic_hreinsa"
+        android:roundIcon="@drawable/ic_hreinsa"
+        android:label="Hreinsa"
+        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        tools:ignore="DataExtractionRules">
+
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- "Clean & share" in the share sheet: links and photos -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:label="Clean &amp; share"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Serves the cleaned copies to whichever app you share them with (only by one-time grant). -->
+        <provider
+            android:name=".CleanFiles"
+            android:authorities="com.ozorhaar.hreinsa.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>
