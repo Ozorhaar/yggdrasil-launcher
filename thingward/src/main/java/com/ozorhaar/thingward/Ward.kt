@@ -26,6 +26,10 @@ object Ward {
     fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     fun autoReply(ctx: Context) = prefs(ctx).getBoolean("auto_reply", true)
     fun setAutoReply(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("auto_reply", on).apply()
+    fun callGuard(ctx: Context) = prefs(ctx).getBoolean("call_guard", true)
+    fun setCallGuard(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("call_guard", on).apply()
+    /** Whether a number belongs to one of your contacts (and true if we can't tell: then it rings). */
+    fun isKnown(ctx: Context, number: String) = !granted(ctx, Manifest.permission.READ_CONTACTS) || isContact(ctx, number)
     fun scamGuard(ctx: Context) = prefs(ctx).getBoolean("scam_guard", true)
     fun setScamGuard(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("scam_guard", on).apply()
 

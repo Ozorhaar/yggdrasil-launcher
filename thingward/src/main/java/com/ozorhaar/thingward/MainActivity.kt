@@ -84,6 +84,21 @@ class MainActivity : Activity() {
         text(if (Ward.autoReply(this)) "On: at most 20 replies a day, and one per sender a month." else
             "Watch only: it notes what it would reply, sends nothing.", 13f, ash)
 
+        text("Calls", 18f, gold, bold = true, top = 22)
+        val rm = getSystemService(android.app.role.RoleManager::class.java)
+        val screening = rm.isRoleHeld(android.app.role.RoleManager.ROLE_CALL_SCREENING)
+        line(screening, "Call screening (Android asks once)")
+        if (!screening) button("Let Thingward screen calls") {
+            startActivityForResult(rm.createRequestRoleIntent(android.app.role.RoleManager.ROLE_CALL_SCREENING), 2)
+        }
+        col.addView(Switch(this).apply {
+            text = "Screen calls"; textSize = 15f; setTextColor(bone); isChecked = Ward.callGuard(this@MainActivity)
+            setPadding(0, dp(8), 0, 0)
+            setOnCheckedChangeListener { _, on -> Ward.setCallGuard(this@MainActivity, on); render() }
+        })
+        text("Contacts ring. Unknown numbers go straight to voicemail without ringing (still in your call history, listed below); " +
+            "if the same number calls again within 3 minutes, it rings. Calls whose caller ID fails the carrier's anti-spoofing check are rejected.", 13f, ash)
+
         text("Scam texts", 18f, gold, bold = true, top = 22)
         col.addView(Switch(this).apply {
             text = "Silence scam texts"; textSize = 15f; setTextColor(bone); isChecked = Ward.scamGuard(this@MainActivity)
@@ -106,4 +121,5 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) = render()
+    @Deprecated("platform") override fun onActivityResult(code: Int, result: Int, data: Intent?) = render()
 }
