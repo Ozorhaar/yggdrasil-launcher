@@ -79,18 +79,36 @@ object Scan {
             else -> Finding("dev", Level.OK, "Debugging is off", "")
         }
 
+        // your own apps (signed with your Yggdrasil or Hafnir key) get their powers listed as yours, not warned about;
+        // if one's key ever changed it would stop counting as yours and the warnings come back
+        val flagsS = PackageManager.GET_SIGNING_CERTIFICATES.toLong()
+        val own = HashMap<String, String>()
+        for (p in pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(flagsS))) {
+            val c = p.signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray() ?: continue
+            val h = MessageDigest.getInstance("SHA-256").digest(c).joinToString("") { b -> "%02x".format(b) }
+            OWN_KEYS[h]?.let { own[p.packageName] = it }
+        }
+        fun mine(pkgs: List<String>, what: String) {
+            val m = pkgs.filter { it in own }
+            if (m.isNotEmpty()) f += Finding("own:$what:" + m.sorted().joinToString(","), Level.OK,
+                "Yours: ${m.joinToString { label(it) }} ($what)", "Signed with your own key, so it's expected.")
+        }
+
         // ---- standing powers: accessibility, notification access, device admin
         fun secureList(k: String) = runCatching { Settings.Secure.getString(ctx.contentResolver, k) }.getOrNull()
             ?.split(':')?.mapNotNull { ComponentName.unflattenFromString(it)?.packageName }?.distinct().orEmpty()
-        val a11y = secureList(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val a11yAll = secureList(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        mine(a11yAll, "accessibility"); val a11y = a11yAll.filter { it !in own }
         f += if (a11y.isEmpty()) Finding("a11y", Level.OK, "No accessibility services", "Nothing can read or tap your screen for you.")
              else Finding("a11y:" + a11y.sorted().joinToString(","), Level.WARN, "Accessibility: ${a11y.joinToString { label(it) }}",
                  "These can read everything on screen and tap for you. Keep only ones you trust.", Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        val listeners = secureList("enabled_notification_listeners")
+        val listenersAll = secureList("enabled_notification_listeners")
+        mine(listenersAll, "notification access"); val listeners = listenersAll.filter { it !in own }
         if (listeners.isNotEmpty()) f += Finding("listen:" + listeners.sorted().joinToString(","), Level.NOTE,
             "Notification access: ${listeners.joinToString { label(it) }}", "These can read every notification, including codes and messages.",
             Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        val admins = ctx.getSystemService(DevicePolicyManager::class.java).activeAdmins.orEmpty().map { it.packageName }.distinct()
+        val adminsAll = ctx.getSystemService(DevicePolicyManager::class.java).activeAdmins.orEmpty().map { it.packageName }.distinct()
+        mine(adminsAll, "device admin"); val admins = adminsAll.filter { it !in own }
         if (admins.isNotEmpty()) f += Finding("admin:" + admins.sorted().joinToString(","), Level.NOTE,
             "Device admin: ${admins.joinToString { label(it) }}", "These can lock or wipe the phone.", Intent().setClassName("com.android.settings", "com.android.settings.DeviceAdminSettings"))
 
@@ -119,6 +137,7 @@ object Scan {
                 if (from in STORES && System.currentTimeMillis() - p.lastUpdateTime > 365L * 86_400_000) stale += p.packageName
             }
         }
+        mine(installers, "may install its own updates"); installers.removeAll(own.keys)
         f += if (installers.isEmpty()) Finding("installers", Level.OK, "No app may install other apps", "")
              else Finding("installers:" + installers.sorted().joinToString(","), Level.WARN, "May install apps: ${installers.joinToString { label(it) }}",
                  "These can put new apps on the phone. Allow it only while you need it.", Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES))
