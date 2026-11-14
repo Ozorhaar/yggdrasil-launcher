@@ -54,11 +54,20 @@ class MainActivity : Activity() {
                 background = GradientDrawable().apply { setColor(Color.rgb(20, 24, 34)); cornerRadius = dp(10).toFloat(); setStroke(dp(1), accent) }
                 layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }
                 addView(TextView(context).apply {
-                    text = (if (f.id in freshIds && before != null) "NEW · " else "") + f.title
+                    text = (if (f.id in freshIds && before != null) "NEW · " else "") + (if (f.trusted) "Trusted · " else "") + f.title
                     textSize = 15f; setTextColor(if (f.level == Scan.Level.OK) bone else accent); typeface = Typeface.DEFAULT_BOLD
                 })
                 if (f.detail.isNotEmpty()) addView(TextView(context).apply { text = f.detail; textSize = 13f; setTextColor(ash); setPadding(0, dp(3), 0, 0) })
                 f.fix?.let { i -> setOnClickListener { runCatching { startActivity(i) } } }
+                if (f.trusted || f.trustable) setOnLongClickListener {
+                    android.app.AlertDialog.Builder(this@MainActivity)
+                        .setTitle(if (f.trusted) "Stop trusting this?" else "Trust this?")
+                        .setMessage(if (f.trusted) "It will show as a warning again." else
+                            "It moves to blue and won't alert you. If another app joins it, or the app gains a new power, it warns again.")
+                        .setPositiveButton(if (f.trusted) "Stop trusting" else "Trust") { _, _ -> Watch.setTrusted(this@MainActivity, f.id, !f.trusted); render() }
+                        .setNegativeButton("Cancel", null).show()
+                    true
+                }
             })
         }
         col.addView(Button(this).apply {
@@ -67,7 +76,7 @@ class MainActivity : Activity() {
             setOnClickListener { render() }
         })
         col.addView(TextView(this).apply {
-            text = "Reads settings and the app list only. No internet permission: nothing it sees leaves the phone."
+            text = "Tap a finding to open its setting. Long-press a red one you've checked to trust it.\n\nReads settings and the app list only. No internet permission: nothing it sees leaves the phone."
             textSize = 12f; setTextColor(ash); setPadding(0, dp(14), 0, 0)
         })
     }

@@ -27,7 +27,11 @@ object Scan {
     enum class Level { OK, NOTE, WARN }
 
     /** [id] is stable across scans, so a finding can be told apart as new. */
-    class Finding(val id: String, val level: Level, val title: String, val detail: String, val fix: Intent? = null)
+    class Finding(val id: String, val level: Level, val title: String, val detail: String, val fix: Intent? = null, val trusted: Boolean = false) {
+        /** Things you can't wave off: they're either always worth fixing or a sign of tampering. */
+        val trustable get() = level == Level.WARN && listOf("adb_wifi", "lock", "patch", "signer:").none { id == it || id.startsWith(it) && it.endsWith(":") }
+        fun asTrusted() = Finding(id, Level.NOTE, title, "You marked this as trusted. Long-press to undo.", fix, trusted = true)
+    }
 
     /** Your own signing keys (SHA-256 of the certificate): Yggdrasil's, and Hafnir's (also BMO's). */
     private val OWN_KEYS = mapOf(

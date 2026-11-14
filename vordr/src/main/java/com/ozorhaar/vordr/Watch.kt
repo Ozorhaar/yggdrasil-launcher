@@ -29,10 +29,19 @@ class Watch : JobService() {
         fun last(ctx: Context): Scan.Saved? = Scan.Saved.parse(prefs(ctx).getString("last", null))
         fun save(ctx: Context, r: Scan.Report) = prefs(ctx).edit().putString("last", Scan.Saved.from(r).toJson()).apply()
 
+        /** Warnings you've reviewed and kept. Each id names the exact apps involved, so a new app or power is a new id and warns again. */
+        fun trusted(ctx: Context): Set<String> = prefs(ctx).getStringSet("trusted", emptySet())!!.toSet()
+        fun setTrusted(ctx: Context, id: String, on: Boolean) {
+            val t = trusted(ctx).toMutableSet(); if (on) t += id else t -= id
+            prefs(ctx).edit().putStringSet("trusted", t).apply()
+        }
+
         /** Runs a scan against the last one, saves it, and returns the warnings that are new. */
         fun look(ctx: Context): Pair<Scan.Report, List<Scan.Finding>> {
             val before = last(ctx)
-            val r = Scan.run(ctx, before)
+            val trust = trusted(ctx)
+            val raw = Scan.run(ctx, before)
+            val r = Scan.Report(raw.findings.map { if (it.id in trust && it.trustable) it.asTrusted() else it }, raw.grants, raw.signers, raw.at)
             val fresh = r.findings.filter { it.level == Scan.Level.WARN && (before == null || it.id !in before.ids) }
             save(ctx, r)
             return r to fresh
