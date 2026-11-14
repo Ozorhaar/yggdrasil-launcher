@@ -20,7 +20,18 @@ class ClassifierTest {
         assertEquals("STOP", v("Your ballot matters. Paid for by Vote Ohio. STOP to end").keyword)
     }
 
-    @Test fun noDisclaimerIsOnlyNoted() {
+    @Test fun campaignsWithoutDisclaimer() {
+        val a = v("Jason, it's Sherrod. Polls show this Senate race is TIED. Can you chip in \$5 before midnight? Reply STOP to end")
+        assertEquals(Verdict.OPT_OUT, a.verdict); assertEquals("STOP", a.keyword)
+        val b = v("Trump needs YOU! Final FEC deadline tonight. Give now: secure.winred.com/abc txt STOP2END")
+        assertEquals(Verdict.OPT_OUT, b.verdict); assertEquals("STOP2END", b.keyword)
+        val c = v("Democrats are counting on you, the midterms are slipping away. Donate: secure.actblue.com/donate/xyz")
+        assertEquals(Verdict.OPT_OUT, c.verdict); assertEquals("STOP", c.keyword)
+        val d = v("Republican voter survey: should Congress act on gas prices? Take the poll and contribute today")
+        assertEquals(Verdict.OPT_OUT, d.verdict)
+    }
+
+    @Test fun scamInCampaignClothesIsOnlyNoted() {
         val r = v("Final notice: your vote is missing from our candidate survey! Donate to restore your status. Reply STOP to opt out")
         assertEquals(Verdict.SUSPECT, r.verdict)
     }

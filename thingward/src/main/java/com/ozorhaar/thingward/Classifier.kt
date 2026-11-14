@@ -10,9 +10,9 @@ object Classifier {
     enum class Verdict {
         /** Not political, or something we must never touch. */
         NONE,
-        /** Political, carries the disclaimer and names its opt-out word: reply with it. */
+        /** Clearly a campaign text: reply with its opt-out word (STOP if it names none). */
         OPT_OUT,
-        /** Looks political (opt-out plus campaign wording) but has no disclaimer: only noted, in case it's a scam dressed as one. */
+        /** Campaign-flavoured but with scam hallmarks ("restore your status", prizes, refunds): only noted, never answered. */
         SUSPECT,
     }
 
@@ -31,6 +31,14 @@ object Classifier {
     private val POLITICAL = Regex(
         """\b(donat\w*|chip\s+in|contribut\w*|campaign\w*|candidate\w*|election\w*|elect\b|re-?elect\w*|vote\w*|voting|ballot\w*|congress\w*|senat\w*|democrat\w*|republican\w*|gop|dnc|rnc|nrcc|dccc|nrsc|dscc|pac|super\s?pac|primary|primaries|midterms?|caucus\w*|governor|president\w*|polls?|petition|grassroots|matched?|matching|deadline|fundrais\w*|patriots?|liberals?|conservatives?|progressives?)\b""", I)
 
+    // where campaigns take money: a link to one of these is as good as a disclaimer
+    private val DONATION_LINK = Regex("""\b(winred\.com|secure\.winred|actblue\.com|secure\.actblue|anedot\.com|ngpvan\.com|revv\.co)\b""", I)
+    private val MONEY_ASK = Regex("""\b(donat\w*|chip\s+in|contribut\w*|fundrais\w*|match(ed|ing)?)\b""", I)
+
+    // what scammers wearing campaign clothes say that real campaigns don't
+    private val SCAM = Regex(
+        """\b(restore|reactivat\w*|suspend\w*|your\s+(status|account|registration)\s+(is|has|was|will)|claim\s+your|prize|winner|gift\s?card|refund|rebate|stimulus|crypto|bitcoin|wire|zelle|cash\s?app|venmo)\b""", I)
+
     // texts we never act on, whatever else they say: codes, health, money and deliveries
     private val SENSITIVE = Regex(
         """\b(code|otp|passcode|pin|verification|verify|2fa|one[-\s]?time|pharmacy|prescription|rx|appointment|doctor|fraud|bank\w*|balance|delivery|delivered|tracking|order\s+#|password|log\s?in)\b""", I)
@@ -41,10 +49,13 @@ object Classifier {
         val word = (OPT_OUT.find(text)?.groupValues?.get(1) ?: OPT_OUT2.find(text)?.groupValues?.get(1))?.uppercase()
         val disclaimer = DISCLAIMER.containsMatchIn(text)
         val political = POLITICAL.findAll(text).map { it.value.lowercase() }.toSet().size
+        val link = DONATION_LINK.containsMatchIn(text)
+        val campaign = disclaimer || link || (word != null && political >= 2) || (political >= 3 && MONEY_ASK.containsMatchIn(text))
         return when {
-            word != null && disclaimer -> Result(Verdict.OPT_OUT, word, "disclaimer and opt-out word")
-            word != null && political >= 2 -> Result(Verdict.SUSPECT, word, "campaign wording and opt-out, no disclaimer")
-            else -> Result(Verdict.NONE, null, "not political")
+            !campaign -> Result(Verdict.NONE, null, "not political")
+            SCAM.containsMatchIn(text) && !disclaimer -> Result(Verdict.SUSPECT, word, "campaign wording with scam hallmarks")
+            else -> Result(Verdict.OPT_OUT, word ?: "STOP",
+                when { disclaimer -> "disclaimer"; link -> "donation link"; word != null -> "campaign wording and opt-out"; else -> "campaign money ask" })
         }
     }
 

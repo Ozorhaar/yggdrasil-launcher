@@ -51,7 +51,7 @@ object Ward {
         val r = Classifier.classify(body)
         when (r.verdict) {
             Classifier.Verdict.NONE -> return
-            Classifier.Verdict.SUSPECT -> log(ctx, from, body, "noted (no disclaimer)", r.keyword)
+            Classifier.Verdict.SUSPECT -> log(ctx, from, body, "noted (looks like a scam)", r.keyword)
             Classifier.Verdict.OPT_OUT -> {
                 val word = r.keyword ?: "STOP"
                 val day = now / 86_400_000L
