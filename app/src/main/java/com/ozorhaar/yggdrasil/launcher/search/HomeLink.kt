@@ -64,7 +64,16 @@ class HomeLink(context: Context) {
             }
     }
 
-    val url: String get() = prefs.getString("url", DEFAULT_URL) ?: DEFAULT_URL
+    val url: String get() {
+        val saved = prefs.getString("url", DEFAULT_URL) ?: DEFAULT_URL
+        // asgard.ozorhaar.com (Nabu Casa's public custom domain) was retired; HA now answers at
+        // ha.ozorhaar.com through the Mac mini's Caddy (at home, or away over Bifrost). Same token.
+        if (saved.contains("asgard.ozorhaar.com")) {
+            prefs.edit().putString("url", HA_URL).apply()
+            return HA_URL
+        }
+        return saved
+    }
     val configured: Boolean get() = prefs.contains("token")
 
     private var cache: List<Device> = emptyList()
@@ -485,6 +494,7 @@ class HomeLink(context: Context) {
 
     companion object {
         const val DEFAULT_URL = ""
+        const val HA_URL = "https://ha.ozorhaar.com"
         const val AGENT = "conversation.hafnir_mac"
         /** The only cameras the launcher may ask Home Assistant for. */
         private val CAMERAS = Lookout.entries.map { it.camera }.toSet()
