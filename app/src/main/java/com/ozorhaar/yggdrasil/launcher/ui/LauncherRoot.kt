@@ -764,6 +764,12 @@ fun LauncherRoot() {
                         }
                     },
                     onLongPress = { p ->
+                        // hold the Odin stone (camera) at the band's foot: Ráða, to read a QR code safely
+                        if (footRects[1]?.inflate(10f)?.contains(p) == true) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            launchPackage("Ráða", "com.ozorhaar.rada", labels = listOf("ráða", "rada"))
+                            return@detectTapGestures
+                        }
                         // hold the shield at the band's foot: Proton Authenticator
                         if (footRects[4]?.inflate(10f)?.contains(p) == true) {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -2024,7 +2030,7 @@ private fun SettingsPanel(layout: LayoutStore, onClose: () -> Unit) {
 
         Section("Gestures")
         RuneText(
-            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nThe marks at the band's foot: voicemail, camera, gallery, Proton Pass (hold the shield: Proton Authenticator)\nTap a wolf head on the longship: Life360 (stern) or My BMW (bow); the hull: Car\nHold the longhouse: Smart Home\nTap the World Tree, runestone, cave, skald, smithy, cookfire or knarr: their folders\nHold empty space, then Places: see what each spot in the scene opens\nHold a place: its most-used apps (the runestone: the rune of the day)\nDrag an app onto a place and hold it there a moment: into that folder\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
+            "Swipe up: all apps\nSwipe down from the top: notifications\nSwipe down anywhere else: search\nTap the dock's rune band: Hafnir\nTap the bridge mark on the band: Bifrost\nThe marks at the band's foot: voicemail, camera (hold it: Ráða, to read a QR code), gallery, Proton Pass (hold the shield: Proton Authenticator)\nTap a wolf head on the longship: Life360 (stern) or My BMW (bow); the hull: Car\nHold the longhouse: Smart Home\nTap the World Tree, runestone, cave, skald, smithy, cookfire or knarr: their folders\nHold empty space, then Places: see what each spot in the scene opens\nHold a place: its most-used apps (the runestone: the rune of the day)\nDrag an app onto a place and hold it there a moment: into that folder\nTap the marks at the band's left end: launcher settings\nTap the rune at its right end: Hafnir\nHold the bridge mark: lower or raise the bridge\nDouble-tap: lock\nHold empty space: widgets and settings\nHold an app: options\nHold and drag an app: move it\nDrop it on another app: make a folder\nHold it at the edge: turn the page",
             16.sp, Ygg.Bone,
         )
         Spacer(Modifier.height(30.dp))
