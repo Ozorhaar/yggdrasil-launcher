@@ -313,6 +313,8 @@ class FjordScene(ctx: Context) {
         val away: Boolean get() = !hearth
     }
     var house: House? = null
+    private val fjordPrefs = ctx.getSharedPreferences("fjord", Context.MODE_PRIVATE)
+    private var lastOut = fjordPrefs.getFloat("ship_out", 0f)
 
     /** When someone last came home (the windows flare for 20 s after). */
     var flareAt = 0L
@@ -720,8 +722,12 @@ class FjordScene(ctx: Context) {
         // longship, its reflection and the ripples. It sails out of the fjord when no one's home
         // and back in when someone is, and rows while the house sends power to the grid.
         val h0 = house
-        val outTarget = if (h0?.away == true && cfg(Touch.LONGSHIP)) 1f else 0f
-        if (shipOut < 0f) shipOut = if (h0 == null) 0f else outTarget
+        // Until the house answers (a fresh start of the launcher or the wallpaper), keep the ship
+        // where it last was, so it doesn't sail out again every time the launcher restarts.
+        val outTarget = if (h0 == null) lastOut else (if (h0.away && cfg(Touch.LONGSHIP)) 1f else 0f).also {
+            if (it != lastOut) { lastOut = it; fjordPrefs.edit().putFloat("ship_out", it).apply() }
+        }
+        if (shipOut < 0f) shipOut = outTarget
         if (shipOut != outTarget) {
             val step = dt / 16f                                   // ~16 s to cross the fjord
             shipOut = if (shipOut < outTarget) min(outTarget, shipOut + step) else max(outTarget, shipOut - step)
