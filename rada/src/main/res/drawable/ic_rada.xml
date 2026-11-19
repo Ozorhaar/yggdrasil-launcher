@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three gold QR finder squares on night, with a frost eye in the fourth corner: a code, read. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#0B0E15" android:pathData="M0,0h108v108h-108z" />
+    <path android:fillColor="#ECD08F" android:fillType="evenOdd" android:pathData="M26,26h22v22h-22zM31,31v12h12v-12z M60,26h22v22h-22zM65,31v12h12v-12z M26,60h22v22h-22zM31,65v12h12v-12z" />
+    <path android:fillColor="#ECD08F" android:pathData="M35,35h4v4h-4z M69,35h4v4h-4z M35,69h4v4h-4z" />
+    <path android:fillColor="#8FC4E0" android:pathData="M58,71q13,-11 26,0q-13,11 -26,0z" />
+    <path android:fillColor="#0B0E15" android:pathData="M71,67a4,4 0,1 1,0 8a4,4 0,1 1,0 -8z" />
+</vector>

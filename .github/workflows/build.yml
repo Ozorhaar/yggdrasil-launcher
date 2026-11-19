@@ -2,7 +2,7 @@ name: forge-launcher
 on:
   push:
     branches: [main]
-    paths-ignore: ["**.md", "thingward/**", ".github/workflows/thingward.yml", "hreinsa/**", ".github/workflows/hreinsa.yml", "vordr/**", ".github/workflows/vordr.yml"]
+    paths-ignore: ["**.md", "thingward/**", ".github/workflows/thingward.yml", "hreinsa/**", ".github/workflows/hreinsa.yml", "vordr/**", ".github/workflows/vordr.yml", "rada/**", ".github/workflows/rada.yml"]
   workflow_dispatch:
 
 permissions:
