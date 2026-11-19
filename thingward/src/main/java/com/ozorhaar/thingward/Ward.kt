@@ -37,8 +37,22 @@ object Ward {
 
     fun digits(s: String) = s.filter { it.isDigit() }.takeLast(10)
 
+    /** Texts already looked at (sender, start of the text): the same text can arrive both as a
+     *  text and as its notification, and notifications get re-posted. */
+    private val seen = LinkedHashMap<String, Long>()
+
+    @Synchronized private fun firstLook(from: String, body: String): Boolean {
+        val now = System.currentTimeMillis()
+        seen.entries.removeAll { now - it.value > 30 * 60_000L }
+        val key = digits(from) + "|" + norm(body).take(60)
+        if (key in seen) return false
+        seen[key] = now
+        return true
+    }
+
     fun handle(ctx: Context, from: String, body: String, subId: Int) {
         if (from.isBlank() || body.isBlank()) return
+        if (!firstLook(from, body)) return
         val now = System.currentTimeMillis()
         val p = prefs(ctx)
         // never anything from someone in your contacts, and nothing at all if we can't check

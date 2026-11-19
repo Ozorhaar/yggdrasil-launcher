@@ -32,6 +32,32 @@ class Silencer : NotificationListenerService() {
             }
         }
         // a few seconds' grace: the text's broadcast may reach Thingward just after the notification
-        if (Ward.shouldSilence(title, text)) cancelNotification(sbn.key)
+        if (Ward.shouldSilence(title, text)) { cancelNotification(sbn.key); return }
+
+        // Picture texts (MMS) and chat (RCS) messages never reach Thingward as plain texts; most
+        // campaign texts with a picture are MMS. Read those from the notification instead: only a
+        // one-to-one conversation whose title is a number (a stranger, not a contact or a group).
+        val from = senderNumber(title) ?: return
+        @Suppress("DEPRECATION")
+        val latest = x.getParcelableArray(Notification.EXTRA_MESSAGES)?.lastOrNull()
+            ?.let { (it as? android.os.Bundle)?.getCharSequence("text")?.toString() }
+            ?: (x.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: x.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+        if (latest.isNullOrBlank()) return
+        val ctx = applicationContext
+        Thread { runCatching { Ward.handle(ctx, from, latest, -1) } }.start()
+    }
+
+    /** "+1 (816) 656-2777" or a short code like "88022" -> a number to reply to; names and groups -> null. */
+    private fun senderNumber(title: String): String? {
+        val t = title.trim()
+        if (t.isEmpty() || t.any { it.isLetter() } || t.contains(',')) return null
+        val d = t.filter { it.isDigit() }
+        return when {
+            d.length in 5..6 -> d                       // short code
+            d.length == 10 -> "+1$d"
+            d.length == 11 && d.startsWith("1") -> "+$d"
+            d.length in 11..15 && t.startsWith("+") -> "+$d"
+            else -> null
+        }
     }
 }
