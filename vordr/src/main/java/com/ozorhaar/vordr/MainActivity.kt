@@ -43,7 +43,7 @@ class MainActivity : Activity() {
         col.addView(TextView(this).apply {
             text = (if (warn == 0) "All quiet. " else "$warn to look at. ") +
                 (before?.let { "Last look ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it.at))}." } ?: "First look.") +
-                " Checks again each week and tells you if something new turns up."
+                " Checks again each day and tells you (and the fortress) if something new turns up."
             textSize = 14f; setTextColor(ash); setPadding(0, dp(6), 0, dp(10))
         })
         val order = listOf(Scan.Level.WARN, Scan.Level.NOTE, Scan.Level.OK)

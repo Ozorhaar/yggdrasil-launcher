@@ -12,17 +12,29 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 
-/** The weekly look: scans quietly and only speaks up when a warning turns up that wasn't there before. */
+/** The daily look: scans quietly and only speaks up when a warning turns up that wasn't there before. */
 class Watch : JobService() {
     companion object {
         private const val JOB = 4401
         private const val CHANNEL = "watch"
+        private const val DAY = 86_400_000L
+
+        /** Hands new warnings to the launcher to pass on to Home Assistant and the fortress. */
+        fun report(ctx: Context, fresh: List<Scan.Finding>) {
+            if (fresh.isEmpty()) return
+            runCatching {
+                ctx.sendBroadcast(Intent("com.ozorhaar.yggdrasil.launcher.WATCH_REPORT")
+                    .setPackage("com.ozorhaar.yggdrasil.launcher")
+                    .putExtra("titles", fresh.map { it.title }.toTypedArray())
+                    .putExtra("details", fresh.map { it.detail }.toTypedArray()))
+            }
+        }
 
         fun schedule(ctx: Context) {
             val js = ctx.getSystemService(JobScheduler::class.java)
-            if (js.getPendingJob(JOB) != null) return
+            if (js.getPendingJob(JOB)?.intervalMillis == DAY) return
             js.schedule(JobInfo.Builder(JOB, ComponentName(ctx, Watch::class.java))
-                .setPeriodic(7L * 86_400_000, 86_400_000).setRequiresBatteryNotLow(true).setPersisted(true).build())
+                .setPeriodic(DAY, 6 * 3_600_000L).setPersisted(true).build())
         }
 
         private fun prefs(ctx: Context) = ctx.getSharedPreferences("watch", Context.MODE_PRIVATE)
@@ -44,6 +56,7 @@ class Watch : JobService() {
             val r = Scan.Report(raw.findings.map { if (it.id in trust && it.trustable) it.asTrusted() else it }, raw.grants, raw.signers, raw.at)
             val fresh = r.findings.filter { it.level == Scan.Level.WARN && (before == null || it.id !in before.ids) }
             save(ctx, r)
+            report(ctx, fresh)
             return r to fresh
         }
     }

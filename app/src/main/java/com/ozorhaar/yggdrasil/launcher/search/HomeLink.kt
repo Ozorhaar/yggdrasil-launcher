@@ -441,6 +441,12 @@ class HomeLink(context: Context) {
         j.getDouble("latitude") to j.getDouble("longitude")
     }.getOrNull()
 
+    /** Fires an event on Home Assistant's bus (for automations to act on). Blocking; throws on failure. */
+    fun fireEvent(type: String, data: org.json.JSONObject) {
+        require(configured && Regex("^[a-z0-9_]+$").matches(type))
+        request(url, token(), "POST", "/api/events/$type", data.toString())
+    }
+
     private fun request(base: String, token: String, method: String, path: String, body: String?): String {
         val c = URL(base + path).openConnection() as HttpURLConnection
         try {

@@ -23,6 +23,11 @@
     <!-- Waking Hafnir from the dock; Hafnir only grants it to Yggdrasil-signed apps -->
     <uses-permission android:name="com.ozorhaar.hafnir.permission.LISTEN" />
 
+    <!-- Only apps signed with the Yggdrasil key may hand the launcher reports to pass on (Vörðr's warnings). -->
+    <permission
+        android:name="com.ozorhaar.yggdrasil.permission.REPORT"
+        android:protectionLevel="signature" />
+
     <!-- See every app that has a launcher icon (Android 11+ package visibility). -->
     <queries>
         <package android:name="com.ozorhaar.bifrost" />
@@ -108,6 +113,16 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/fjord_wallpaper" />
         </service>
+
+        <!-- Vörðr's new warnings, passed on to Home Assistant (and from there the fortress's alerts). -->
+        <receiver
+            android:name=".services.WatchReport"
+            android:exported="true"
+            android:permission="com.ozorhaar.yggdrasil.permission.REPORT">
+            <intent-filter>
+                <action android:name="com.ozorhaar.yggdrasil.launcher.WATCH_REPORT" />
+            </intent-filter>
+        </receiver>
 
         <!-- The installer's answer to an in-app update. -->
         <receiver

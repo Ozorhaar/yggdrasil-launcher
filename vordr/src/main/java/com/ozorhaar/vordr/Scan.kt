@@ -98,6 +98,30 @@ object Scan {
                 "Yours: ${m.joinToString { label(it) }} ($what)", "Signed with your own key, so it's expected.")
         }
 
+        // ---- the way out: Bifrost should always be up, and nothing should steer DNS around the house
+        val cm = ctx.getSystemService(android.net.ConnectivityManager::class.java)
+        @Suppress("DEPRECATION") val nets = runCatching { cm.allNetworks.toList() }.getOrDefault(emptyList())
+        val vpnUp = nets.any { cm.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true }
+        val online = nets.any { cm.getNetworkCapabilities(it)?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true }
+        f += when {
+            vpnUp -> Finding("vpn", Level.OK, "VPN is up", "Traffic goes through Bifrost.")
+            online -> Finding("vpn_off", Level.WARN, "No VPN running", "Bifrost is off, so traffic skips the house's protection. Turn it back on.",
+                Intent(Settings.ACTION_VPN_SETTINGS))
+            else -> Finding("vpn", Level.OK, "Offline", "")
+        }
+        fun secureStr(k: String) = runCatching { Settings.Secure.getString(ctx.contentResolver, k) }.getOrNull()
+        secureStr("always_on_vpn_app")?.let { app ->
+            f += if (app != "com.ozorhaar.bifrost") Finding("alwayson:$app", Level.WARN, "Always-on VPN isn't Bifrost",
+                "Set to ${label(app)}.", Intent(Settings.ACTION_VPN_SETTINGS))
+            else if (secureStr("always_on_vpn_lockdown") == "1") Finding("lockdown", Level.OK, "Bifrost is always on, and blocks traffic without it", "")
+            else Finding("lockdown_off", Level.WARN, "\"Block connections without VPN\" is off",
+                "If Bifrost drops, apps carry on unprotected. Turn it on in Bifrost's VPN settings.", Intent(Settings.ACTION_VPN_SETTINGS))
+        }
+        val dot = nets.mapNotNull { runCatching { cm.getLinkProperties(it)?.privateDnsServerName }.getOrNull() }.firstOrNull()
+        if (dot != null) f += Finding("dot:$dot", Level.WARN, "Private DNS is set to $dot",
+            "Lookups go there instead of the house's DNS, past its ad, tracker and malware blocking. Set Private DNS to Off.",
+            Intent("android.settings.WIRELESS_SETTINGS"))
+
         // ---- standing powers: accessibility, notification access, device admin
         fun secureList(k: String) = runCatching { Settings.Secure.getString(ctx.contentResolver, k) }.getOrNull()
             ?.split(':')?.mapNotNull { ComponentName.unflattenFromString(it)?.packageName }?.distinct().orEmpty()

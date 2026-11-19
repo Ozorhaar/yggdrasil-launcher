@@ -7,7 +7,11 @@
     <!-- The weekly look, and a notice when something new turns up. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Nothing it sees can leave the phone. -->
+    <!-- New warnings are handed to the Yggdrasil launcher, which passes them to Home Assistant; only
+         apps signed with the Yggdrasil key hold this. Declared here too so install order doesn't matter. -->
+    <permission android:name="com.ozorhaar.yggdrasil.permission.REPORT" android:protectionLevel="signature" />
+    <uses-permission android:name="com.ozorhaar.yggdrasil.permission.REPORT" />
+    <!-- Vörðr itself still never touches the network. -->
     <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
 
